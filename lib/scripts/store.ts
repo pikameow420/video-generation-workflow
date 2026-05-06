@@ -1,0 +1,65 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { getEnv } from "@/lib/env";
+import { savedScriptSchema } from "@/lib/schemas";
+
+export type SavedScriptSource = "generated" | "manual" | "uploaded";
+
+export type SavedScriptRecord = {
+  id: string;
+  title: string;
+  body: string;
+  source: SavedScriptSource;
+  createdAt: string;
+};
+
+type PutSavedScriptInput = {
+  title: string;
+  body: string;
+  source: SavedScriptSource;
+};
+
+async function readIndex(indexPath: string): Promise<SavedScriptRecord[]> {
+  try {
+    const content = await readFile(indexPath, "utf8");
+    const parsed = JSON.parse(content) as SavedScriptRecord[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException;
+    if (error.code === "ENOENT") {
+      return [];
+    }
+    throw err;
+  }
+}
+
+async function appendToIndex(record: SavedScriptRecord): Promise<void> {
+  const env = getEnv();
+  const indexPath = path.resolve(process.cwd(), env.SAVED_SCRIPT_INDEX_PATH);
+  await mkdir(path.dirname(indexPath), { recursive: true });
+  const current = await readIndex(indexPath);
+  current.unshift(record);
+  await writeFile(indexPath, JSON.stringify(current, null, 2), "utf8");
+}
+
+export async function putSavedScript(
+  input: PutSavedScriptInput,
+): Promise<SavedScriptRecord> {
+  const record = savedScriptSchema.parse({
+    id: randomUUID(),
+    title: input.title.trim(),
+    body: input.body.trim(),
+    source: input.source,
+    createdAt: new Date().toISOString(),
+  });
+  await appendToIndex(record);
+  return record;
+}
+
+export async function listSavedScripts(): Promise<SavedScriptRecord[]> {
+  const env = getEnv();
+  const indexPath = path.resolve(process.cwd(), env.SAVED_SCRIPT_INDEX_PATH);
+  const records = await readIndex(indexPath);
+  return records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}

@@ -23,6 +23,11 @@
 # misc
 .DS_Store
 *.pem
+/data/reference-images.json
+/data/saved-scripts.json
+/data/captioned-videos.json
+/public/uploads/reference-images
+/public/uploads/captioned-videos
 
 # debug
 npm-debug.log*
