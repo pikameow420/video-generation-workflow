@@ -23,8 +23,20 @@ type PutSavedScriptInput = {
 async function readIndex(indexPath: string): Promise<SavedScriptRecord[]> {
   try {
     const content = await readFile(indexPath, "utf8");
-    const parsed = JSON.parse(content) as SavedScriptRecord[];
-    return Array.isArray(parsed) ? parsed : [];
+    try {
+      const parsed = JSON.parse(content) as SavedScriptRecord[];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      // Recover from minor JSON corruption (e.g. accidental trailing chars).
+      const firstBracket = content.indexOf("[");
+      const lastBracket = content.lastIndexOf("]");
+      if (firstBracket >= 0 && lastBracket > firstBracket) {
+        const extracted = content.slice(firstBracket, lastBracket + 1);
+        const parsed = JSON.parse(extracted) as SavedScriptRecord[];
+        return Array.isArray(parsed) ? parsed : [];
+      }
+      throw new Error("saved-scripts index is invalid JSON");
+    }
   } catch (err) {
     const error = err as NodeJS.ErrnoException;
     if (error.code === "ENOENT") {

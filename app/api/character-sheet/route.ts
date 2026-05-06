@@ -100,7 +100,15 @@ export async function POST(req: Request) {
   try {
     const json = await req.json();
     const input = characterSheetRequestSchema.parse(json);
-    const prompt = buildCharacterSheetPrompt(input);
+    const normalizedRefUrls = (input.referenceImageUrls ?? []).map((url) =>
+      url.trim().startsWith("/")
+        ? new URL(url.trim(), req.url).toString()
+        : url.trim(),
+    );
+    const prompt = buildCharacterSheetPrompt({
+      ...input,
+      referenceImageUrls: normalizedRefUrls,
+    });
     const { dataUrl, mimeType } = await atlasImageAsDataUrl(prompt);
 
     return NextResponse.json({ mimeType, imageDataUrl: dataUrl });

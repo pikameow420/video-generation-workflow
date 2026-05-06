@@ -40,6 +40,7 @@ type WizardSnapshot = {
   artDirection: string;
   sheetUrl: string | null;
   sheetSource: "generated" | "uploaded";
+  selectedReferenceUrls: string[];
   videoUrl: string | null;
   videoMeta: { predictionId: string } | null;
   videoStatus: string;
@@ -47,17 +48,6 @@ type WizardSnapshot = {
   subtitleChars: number | null;
   captionedVideoUrl: string | null;
 };
-
-function getInitialWizardSnapshot(): Partial<WizardSnapshot> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(WIZARD_STORAGE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as Partial<WizardSnapshot>;
-  } catch {
-    return {};
-  }
-}
 
 function Spinner({ className = "" }: { className?: string }) {
   return (
@@ -85,74 +75,48 @@ function Spinner({ className = "" }: { className?: string }) {
 }
 
 export function PipelineWizard() {
-  const [initialSnapshot] = useState<Partial<WizardSnapshot>>(
-    getInitialWizardSnapshot,
-  );
-  const [isScriptSidebarOpen, setIsScriptSidebarOpen] = useState(
-    initialSnapshot.isScriptSidebarOpen ?? true,
-  );
-  const [step, setStep] = useState<Step>(initialSnapshot.step ?? "topic");
+  const [isScriptSidebarOpen, setIsScriptSidebarOpen] = useState(true);
+  const [step, setStep] = useState<Step>("topic");
   
   // Topic state
-  const [topic, setTopic] = useState(initialSnapshot.topic ?? "");
-  const [tone, setTone] = useState(initialSnapshot.tone ?? "");
-  const [audience, setAudience] = useState(initialSnapshot.audience ?? "");
-  const [notes, setNotes] = useState(initialSnapshot.notes ?? "");
-  const [basePrompt, setBasePrompt] = useState(initialSnapshot.basePrompt ?? "");
-  const [scriptMode, setScriptMode] = useState<ScriptMode>(
-    initialSnapshot.scriptMode ?? "generate",
-  );
-  const [saveManualScript, setSaveManualScript] = useState(
-    initialSnapshot.saveManualScript ?? true,
-  );
+  const [topic, setTopic] = useState("");
+  const [tone, setTone] = useState("");
+  const [audience, setAudience] = useState("");
+  const [notes, setNotes] = useState("");
+  const [basePrompt, setBasePrompt] = useState("");
+  const [scriptMode, setScriptMode] = useState<ScriptMode>("generate");
+  const [saveManualScript, setSaveManualScript] = useState(true);
   const [manualScriptSource, setManualScriptSource] = useState<
     "manual" | "uploaded"
-  >(initialSnapshot.manualScriptSource ?? "manual");
+  >("manual");
 
   // Scripts state
-  const [scripts, setScripts] = useState<ScriptOption[] | null>(
-    initialSnapshot.scripts ?? null,
-  );
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialSnapshot.selectedId ?? null,
-  );
-  const [scriptEdit, setScriptEdit] = useState(
-    initialSnapshot.scriptEdit ?? { title: "", body: "" },
-  );
+  const [scripts, setScripts] = useState<ScriptOption[] | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [scriptEdit, setScriptEdit] = useState({ title: "", body: "" });
   const [savedScripts, setSavedScripts] = useState<SavedScript[]>([]);
   const [loadingSavedScripts, setLoadingSavedScripts] = useState(false);
   const [savedScriptsLoaded, setSavedScriptsLoaded] = useState(false);
 
   // Sheet state
-  const [artDirection, setArtDirection] = useState(
-    initialSnapshot.artDirection ?? "",
-  );
-  const [sheetUrl, setSheetUrl] = useState<string | null>(
-    initialSnapshot.sheetUrl ?? null,
-  );
+  const [artDirection, setArtDirection] = useState("");
+  const [sheetUrl, setSheetUrl] = useState<string | null>(null);
   const [sheetSource, setSheetSource] = useState<"generated" | "uploaded">(
-    initialSnapshot.sheetSource ?? "generated",
+    "generated",
+  );
+  const [selectedReferenceUrls, setSelectedReferenceUrls] = useState<string[]>(
+    [],
   );
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [loadingReferenceImages, setLoadingReferenceImages] = useState(false);
 
   // Video state
-  const [videoUrl, setVideoUrl] = useState<string | null>(
-    initialSnapshot.videoUrl ?? null,
-  );
-  const [videoMeta, setVideoMeta] = useState<{ predictionId: string } | null>(
-    initialSnapshot.videoMeta ?? null,
-  );
-  const [videoStatus, setVideoStatus] = useState<string>(
-    initialSnapshot.videoStatus ?? "",
-  );
-  const [subtitleSrt, setSubtitleSrt] = useState(initialSnapshot.subtitleSrt ?? "");
-  const [subtitleChars, setSubtitleChars] = useState<number | null>(
-    initialSnapshot.subtitleChars ?? null,
-  );
-  const [captionedVideoUrl, setCaptionedVideoUrl] = useState<string | null>(
-    initialSnapshot.captionedVideoUrl ?? null,
-  );
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoMeta, setVideoMeta] = useState<{ predictionId: string } | null>(null);
+  const [videoStatus, setVideoStatus] = useState<string>("");
+  const [subtitleSrt, setSubtitleSrt] = useState("");
+  const [subtitleChars, setSubtitleChars] = useState<number | null>(null);
+  const [captionedVideoUrl, setCaptionedVideoUrl] = useState<string | null>(null);
 
   // Global UI state
   const [busy, setBusy] = useState(false);
@@ -162,6 +126,53 @@ export function PipelineWizard() {
 
   const isScriptsDone = step === "sheet" || step === "video";
   const isSheetDone = step === "video";
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(WIZARD_STORAGE_KEY);
+      if (!raw) return;
+      const snapshot = JSON.parse(raw) as Partial<WizardSnapshot>;
+
+      if (snapshot.isScriptSidebarOpen !== undefined) {
+        setIsScriptSidebarOpen(snapshot.isScriptSidebarOpen);
+      }
+      if (snapshot.step) setStep(snapshot.step);
+      if (snapshot.topic !== undefined) setTopic(snapshot.topic);
+      if (snapshot.tone !== undefined) setTone(snapshot.tone);
+      if (snapshot.audience !== undefined) setAudience(snapshot.audience);
+      if (snapshot.notes !== undefined) setNotes(snapshot.notes);
+      if (snapshot.basePrompt !== undefined) setBasePrompt(snapshot.basePrompt);
+      if (snapshot.scriptMode) setScriptMode(snapshot.scriptMode);
+      if (snapshot.saveManualScript !== undefined) {
+        setSaveManualScript(snapshot.saveManualScript);
+      }
+      if (snapshot.manualScriptSource) {
+        setManualScriptSource(snapshot.manualScriptSource);
+      }
+      if (snapshot.scripts !== undefined) setScripts(snapshot.scripts);
+      if (snapshot.selectedId !== undefined) setSelectedId(snapshot.selectedId);
+      if (snapshot.scriptEdit) setScriptEdit(snapshot.scriptEdit);
+      if (snapshot.artDirection !== undefined) setArtDirection(snapshot.artDirection);
+      if (snapshot.sheetUrl !== undefined) setSheetUrl(snapshot.sheetUrl);
+      if (snapshot.sheetSource) setSheetSource(snapshot.sheetSource);
+      if (snapshot.selectedReferenceUrls) {
+        setSelectedReferenceUrls(snapshot.selectedReferenceUrls);
+      }
+      if (snapshot.videoUrl !== undefined) setVideoUrl(snapshot.videoUrl);
+      if (snapshot.videoMeta !== undefined) setVideoMeta(snapshot.videoMeta);
+      if (snapshot.videoStatus !== undefined) setVideoStatus(snapshot.videoStatus);
+      if (snapshot.subtitleSrt !== undefined) setSubtitleSrt(snapshot.subtitleSrt);
+      if (snapshot.subtitleChars !== undefined) setSubtitleChars(snapshot.subtitleChars);
+      if (snapshot.captionedVideoUrl !== undefined) {
+        setCaptionedVideoUrl(snapshot.captionedVideoUrl);
+      }
+    } catch {
+      // ignore corrupted local storage and continue with defaults
+    }
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -182,6 +193,7 @@ export function PipelineWizard() {
       artDirection,
       sheetUrl,
       sheetSource,
+      selectedReferenceUrls,
       videoUrl,
       videoMeta,
       videoStatus,
@@ -207,6 +219,7 @@ export function PipelineWizard() {
     artDirection,
     sheetUrl,
     sheetSource,
+    selectedReferenceUrls,
     videoUrl,
     videoMeta,
     videoStatus,
@@ -261,42 +274,6 @@ export function PipelineWizard() {
     void loadSavedScripts();
   }, [loadReferenceImages, loadSavedScripts]);
 
-  const generateScripts = async () => {
-    setError(null);
-    try {
-      setBusy(true);
-      const res = await fetch("/api/scripts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic,
-          tone: tone || undefined,
-          audience: audience || undefined,
-          notes: notes || undefined,
-          basePrompt: basePrompt || undefined,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || `Scripts failed (${res.status})`);
-      }
-      const list = data.scripts as ScriptOption[];
-      setScripts(list);
-      setSelectedId(list[0]?.id ?? null);
-      setScriptEdit({
-        title: list[0]?.title ?? "",
-        body: list[0]?.body ?? "",
-      });
-      setStep("scripts");
-      await loadReferenceImages();
-      await loadSavedScripts();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Request failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const onPickScript = (id: string) => {
     setSelectedId(id);
     const s = scripts?.find((x) => x.id === id);
@@ -345,6 +322,86 @@ export function PipelineWizard() {
     setSavedScripts((prev) => [saved, ...prev]);
     setSavedScriptsLoaded(true);
   }, [scriptMode, scriptEdit, savedScripts, saveScriptToLibrary]);
+
+  const saveGeneratedBatchToLibrary = useCallback(
+    async (items: ScriptOption[]) => {
+      const existing = new Set(
+        savedScripts.map((item) => `${item.title.trim()}::${item.body.trim()}`),
+      );
+      const pending = items.filter((item) => {
+        const key = `${item.title.trim()}::${item.body.trim()}`;
+        if (existing.has(key)) return false;
+        existing.add(key);
+        return true;
+      });
+      if (!pending.length) return;
+
+      const saved: SavedScript[] = [];
+      for (const item of pending) {
+        try {
+          const one = await saveScriptToLibrary({
+            title: item.title,
+            body: item.body,
+            source: "generated",
+          });
+          saved.push(one);
+        } catch {
+          // Keep batch resilient; skip failed entries instead of breaking generation flow.
+        }
+      }
+      if (saved.length) {
+        setSavedScripts((prev) => [...saved, ...prev]);
+        setSavedScriptsLoaded(true);
+      }
+    },
+    [savedScripts, saveScriptToLibrary],
+  );
+
+  const generateScripts = useCallback(async () => {
+    setError(null);
+    try {
+      setBusy(true);
+      const res = await fetch("/api/scripts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          tone: tone || undefined,
+          audience: audience || undefined,
+          notes: notes || undefined,
+          basePrompt: basePrompt || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `Scripts failed (${res.status})`);
+      }
+      const list = data.scripts as ScriptOption[];
+      setScripts(list);
+      setSelectedId(list[0]?.id ?? null);
+      setScriptEdit({
+        title: list[0]?.title ?? "",
+        body: list[0]?.body ?? "",
+      });
+      await saveGeneratedBatchToLibrary(list);
+      setStep("scripts");
+      await loadReferenceImages();
+      await loadSavedScripts();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [
+    topic,
+    tone,
+    audience,
+    notes,
+    basePrompt,
+    loadReferenceImages,
+    loadSavedScripts,
+    saveGeneratedBatchToLibrary,
+  ]);
 
   const continueWithManualScript = async () => {
     const trimmedTitle = scriptEdit.title.trim() || "Custom Script";
@@ -422,6 +479,16 @@ export function PipelineWizard() {
     setError(null);
   };
 
+  const createNewScript = () => {
+    setScriptMode("manual");
+    setScripts(null);
+    setSelectedId(null);
+    setScriptEdit({ title: "", body: "" });
+    setManualScriptSource("manual");
+    setStep("scripts");
+    setError(null);
+  };
+
   const toggleScriptSidebar = () => {
     const next = !isScriptSidebarOpen;
     setIsScriptSidebarOpen(next);
@@ -442,6 +509,10 @@ export function PipelineWizard() {
           scriptTitle: scriptEdit.title,
           scriptBody: scriptEdit.body,
           artDirection: artDirection || undefined,
+          referenceImageUrls:
+            selectedReferenceUrls.length > 0
+              ? selectedReferenceUrls
+              : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -478,6 +549,10 @@ export function PipelineWizard() {
           scriptTitle: scriptEdit.title,
           scriptBody: scriptEdit.body,
           imageDataUrlOrUrl: sheetUrl,
+          referenceImageUrls:
+            selectedReferenceUrls.length > 0
+              ? selectedReferenceUrls
+              : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -518,9 +593,9 @@ export function PipelineWizard() {
       if (!res.ok || !data.url) {
         throw new Error(data?.error || `Upload failed (${res.status})`);
       }
-      setSheetUrl(data.url);
-      setSheetSource("uploaded");
-      setStep("sheet");
+      setSelectedReferenceUrls((prev) =>
+        prev.includes(data.url as string) ? prev : [data.url as string, ...prev],
+      );
       await loadReferenceImages();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
@@ -530,7 +605,19 @@ export function PipelineWizard() {
   };
 
   const selectReferenceImage = (url: string) => {
-    setSheetUrl(url);
+    setSelectedReferenceUrls((prev) =>
+      prev.includes(url) ? prev.filter((x) => x !== url) : [url, ...prev],
+    );
+    setError(null);
+  };
+
+  const useSelectedReferenceDirectly = () => {
+    const first = selectedReferenceUrls[0];
+    if (!first) {
+      setError("Select at least one reference image first");
+      return;
+    }
+    setSheetUrl(first);
     setSheetSource("uploaded");
     setStep("sheet");
     setError(null);
@@ -818,9 +905,18 @@ export function PipelineWizard() {
 
           {selectedScript || !scripts ? (
             <div className="space-y-3 rounded-xl bg-zinc-50 p-4 dark:bg-zinc-900/30">
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                Selected Script (Editable)
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  Selected Script (Editable)
+                </p>
+                <button
+                  type="button"
+                  onClick={createNewScript}
+                  className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  Create New Script
+                </button>
+              </div>
               <input
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-zinc-400 outline-none transition-all dark:border-zinc-700 dark:bg-zinc-900"
                 value={scriptEdit.title}
@@ -890,6 +986,9 @@ export function PipelineWizard() {
             <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
               Reuse Or Upload Your Own Photo
             </p>
+            <p className="text-xs text-zinc-500">
+              Selected references are used in character sheet generation and all selected assets are sent to video generation.
+            </p>
             <div className="flex flex-wrap items-center gap-2">
               <label className="inline-flex cursor-pointer items-center rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">
                 Upload Reference
@@ -917,7 +1016,11 @@ export function PipelineWizard() {
                     key={item.id}
                     type="button"
                     onClick={() => selectReferenceImage(item.url)}
-                    className="group overflow-hidden rounded-lg border border-zinc-200 text-left transition hover:border-zinc-400 dark:border-zinc-700"
+                    className={`group overflow-hidden rounded-lg border text-left transition ${
+                      selectedReferenceUrls.includes(item.url)
+                        ? "border-zinc-900 ring-1 ring-zinc-900 dark:border-zinc-100 dark:ring-zinc-100"
+                        : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700"
+                    }`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -926,6 +1029,7 @@ export function PipelineWizard() {
                       className="h-24 w-full object-cover"
                     />
                     <span className="block truncate px-2 py-1 text-xs text-zinc-600 group-hover:text-zinc-900 dark:text-zinc-400 dark:group-hover:text-zinc-100">
+                      {selectedReferenceUrls.includes(item.url) ? "Selected - " : ""}
                       {item.originalName}
                     </span>
                   </button>
@@ -936,6 +1040,21 @@ export function PipelineWizard() {
                 No saved references yet. Upload one to reuse it later.
               </p>
             )}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={useSelectedReferenceDirectly}
+                disabled={busy || !selectedReferenceUrls.length}
+                className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                Use Selected Reference For Video
+              </button>
+              {selectedReferenceUrls.length ? (
+                <span className="text-xs text-zinc-500">
+                  {selectedReferenceUrls.length} reference{selectedReferenceUrls.length > 1 ? "s" : ""} selected
+                </span>
+              ) : null}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -1000,7 +1119,7 @@ export function PipelineWizard() {
             </button>
           </div>
           <p className="text-xs text-zinc-500">
-            Video generation uses Atlas Cloud Seedance image-to-video (async).
+            Video generation uses Atlas Cloud Seedance reference-to-video (async).
           </p>
         </section>
       ) : isSheetDone && sheetUrl ? (
@@ -1183,6 +1302,38 @@ export function PipelineWizard() {
               >
                 Load previous scripts
               </button>
+            ) : null}
+
+            {scripts?.length ? (
+              <div className="mb-3 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                  Current Generated Batch
+                </p>
+                <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                  {scripts.map((item) => (
+                    <button
+                      key={`generated-${item.id}`}
+                      type="button"
+                      onClick={() => {
+                        onPickScript(item.id);
+                        setStep("scripts");
+                      }}
+                      className={`w-full rounded-lg border p-3 text-left text-xs transition ${
+                        selectedId === item.id
+                          ? "border-zinc-900 bg-zinc-100 dark:border-zinc-100 dark:bg-zinc-800"
+                          : "border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      <p className="line-clamp-1 font-semibold text-zinc-900 dark:text-zinc-100">
+                        {item.title}
+                      </p>
+                      <p className="line-clamp-2 text-zinc-600 dark:text-zinc-400">
+                        {item.body}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : null}
 
             {savedScripts.length ? (

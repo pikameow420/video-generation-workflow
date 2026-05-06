@@ -32,6 +32,8 @@ export const characterSheetRequestSchema = z.object({
   scriptBody: z.string().min(1),
   /** Optional visual guidance for the generated sheet, not a persistent preference. */
   artDirection: z.string().optional(),
+  /** Optional uploaded reference image URLs to steer identity/style consistency. */
+  referenceImageUrls: z.array(z.string().min(1)).max(9).optional(),
 });
 
 export const videoRequestSchema = z.object({
@@ -39,6 +41,8 @@ export const videoRequestSchema = z.object({
   scriptBody: z.string().min(1),
   /** Full data URL (data:image/...;base64,...) or HTTPS URL to an image. */
   imageDataUrlOrUrl: z.string().min(1),
+  /** Additional reference images to be used alongside imageDataUrlOrUrl. */
+  referenceImageUrls: z.array(z.string().min(1)).max(9).optional(),
 });
 
 export const referenceImageSchema = z.object({

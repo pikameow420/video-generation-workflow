@@ -40,48 +40,57 @@ function parseImageRef(s: string): {
   return { buffer, mime, filename };
 }
 
+async function resolveImageUrl(
+  raw: string,
+  req: Request,
+): Promise<string | undefined> {
+  const ref = parseImageRef(raw);
+  if (!ref.remoteUrl && raw.trim().startsWith("/")) {
+    ref.remoteUrl = new URL(raw.trim(), req.url).toString();
+  }
+
+  let imageUrl = ref.remoteUrl;
+  if (ref.buffer && ref.mime && ref.filename) {
+    const env = getEnv();
+    const apiKey = env.ATLASCLOUD_API_KEY;
+    if (!apiKey?.trim()) {
+      throw new Error(
+        "ATLASCLOUD_API_KEY is required to upload reference images for video generation",
+      );
+    }
+    const { downloadUrl } = await uploadMediaFile({
+      buffer: ref.buffer,
+      filename: ref.filename,
+      contentType: ref.mime,
+      apiKey,
+      baseUrl: env.ATLASCLOUD_BASE_URL,
+    });
+    imageUrl = downloadUrl;
+  }
+  return imageUrl;
+}
+
 export async function POST(req: Request) {
   try {
     const json = await req.json();
     const body = videoRequestSchema.parse(json);
-    const ref = parseImageRef(body.imageDataUrlOrUrl);
-    if (!ref.remoteUrl && body.imageDataUrlOrUrl.trim().startsWith("/")) {
-      ref.remoteUrl = new URL(body.imageDataUrlOrUrl.trim(), req.url).toString();
-    }
+    const candidates = [
+      body.imageDataUrlOrUrl,
+      ...(body.referenceImageUrls ?? []),
+    ].filter(Boolean);
+    const resolved = await Promise.all(
+      candidates.map((candidate) => resolveImageUrl(candidate, req)),
+    );
+    const imageUrls = Array.from(new Set(resolved.filter(Boolean))) as string[];
 
-
-    let imageUrl = ref.remoteUrl;
-
-    if (ref.buffer && ref.mime && ref.filename) {
-      const env = getEnv();
-      const apiKey = env.ATLASCLOUD_API_KEY;
-      if (!apiKey?.trim()) {
-        return NextResponse.json(
-          {
-            error:
-              "ATLASCLOUD_API_KEY is required to upload the character sheet image",
-          },
-          { status: 500 },
-        );
-      }
-      const { downloadUrl } = await uploadMediaFile({
-        buffer: ref.buffer,
-        filename: ref.filename,
-        contentType: ref.mime,
-        apiKey,
-        baseUrl: env.ATLASCLOUD_BASE_URL,
-      });
-      imageUrl = downloadUrl;
-    }
-
-    if (!imageUrl) {
+    if (!imageUrls.length) {
       throw new Error("Could not resolve image URL for video generation");
     }
 
     const result = await waitForVideoFromScriptAndImageUrl({
       scriptTitle: body.scriptTitle,
       scriptBody: body.scriptBody,
-      imageUrl,
+      imageUrls,
     });
 
     return NextResponse.json(result);

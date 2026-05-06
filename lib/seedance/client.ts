@@ -1,6 +1,6 @@
 /**
  * Seedance 2.0 image-to-video via Atlas Cloud (ByteDance model hosted on Atlas).
- * @see https://www.atlascloud.ai/models/bytedance/seedance-2.0/image-to-video?tab=api
+ * @see https://www.atlascloud.ai/models/bytedance/seedance-2.0/reference-to-video?tab=api
  */
 
 import { getEnv } from "@/lib/env";
@@ -56,16 +56,20 @@ export async function startVideoGeneration(params: {
   baseUrl: string;
   model: string;
   prompt: string;
-  imageUrl: string;
+  imageUrls: string[];
   duration: number;
   width: number;
   height: number;
   fps: number;
 }): Promise<string> {
+  if (!params.imageUrls.length) {
+    throw new Error("At least one reference image URL is required");
+  }
   const body: Record<string, unknown> = {
     model: params.model,
     prompt: params.prompt,
-    image_url: params.imageUrl,
+    image_url: params.imageUrls[0],
+    image_urls: params.imageUrls,
     width: params.width,
     height: params.height,
     duration: params.duration,
@@ -133,7 +137,7 @@ export type WaitForVideoResult = {
 export async function waitForVideoFromScriptAndImageUrl(options: {
   scriptTitle: string;
   scriptBody: string;
-  imageUrl: string;
+  imageUrls: string[];
 }): Promise<WaitForVideoResult> {
   const env = getEnv();
   const apiKey = env.ATLASCLOUD_API_KEY;
@@ -143,14 +147,18 @@ export async function waitForVideoFromScriptAndImageUrl(options: {
     );
   }
 
-  const prompt = buildVideoPrompt(options.scriptTitle, options.scriptBody);
+  const prompt = buildVideoPrompt(
+    options.scriptTitle,
+    options.scriptBody,
+    options.imageUrls,
+  );
 
   const predictionId = await startVideoGeneration({
     apiKey,
     baseUrl: env.ATLASCLOUD_BASE_URL,
     model: env.ATLASCLOUD_VIDEO_MODEL,
     prompt,
-    imageUrl: options.imageUrl,
+    imageUrls: options.imageUrls,
     duration: env.ATLASCLOUD_VIDEO_DURATION,
     width: env.ATLASCLOUD_VIDEO_WIDTH,
     height: env.ATLASCLOUD_VIDEO_HEIGHT,

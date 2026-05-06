@@ -7,7 +7,6 @@ export const CHARACTER_SHEET_BASE_RULES = [
   "Layout requirements:",
   "- Exactly 9 panels arranged in a 3x3 grid.",
   "- EACH panel must be strict 9:16 portrait frame ratio (this is mandatory).",
-  "- Do NOT make only the entire canvas 9:16 while panels are another ratio.",
   "- Use clear panel boundaries and consistent spacing.",
   "- Cohesive character + scene vibe matching the script below.",
   "- Cinematic keyframe style, clean composition, no text labels.",
@@ -17,10 +16,22 @@ export function buildCharacterSheetPrompt(input: {
   scriptTitle: string;
   scriptBody: string;
   artDirection?: string;
+  referenceImageUrls?: string[];
 }): string {
   const extra = input.artDirection?.trim();
+  const refs = input.referenceImageUrls?.filter(Boolean) ?? [];
   return [
     ...CHARACTER_SHEET_BASE_RULES,
+    refs.length
+      ? "Reference image grounding requirements:"
+      : null,
+    ...refs.map(
+      (url, index) =>
+        `- Use reference image ${index + 1} as visual identity anchor: ${url}`,
+    ),
+    refs.length
+      ? "- Preserve the same core character identity and style from these references."
+      : null,
     "",
     `Script title: ${input.scriptTitle}`,
     `Script (for vibe): ${input.scriptBody}`,
