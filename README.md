@@ -42,7 +42,7 @@ for `image/jpeg`, `image/png`, and `image/webp`.
 
 Post-generation subtitles are configured with:
 
-- `WHISPER_API_KEY` for transcript generation.
+- `OPENAI_API_KEY` for transcript generation.
 - `SUBTITLE_DEFAULT_LANGUAGE` and `SUBTITLE_MAX_CHARS_PER_LINE` for caption formatting.
 - `LOCAL_CAPTIONED_VIDEO_DIR`, `LOCAL_CAPTIONED_VIDEO_BASE_PATH`, and `CAPTIONED_VIDEO_INDEX_PATH` for storing burned videos in local mode.
 

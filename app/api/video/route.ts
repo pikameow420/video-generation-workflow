@@ -17,14 +17,18 @@ function parseImageRef(s: string): {
   filename?: string;
 } {
   const trimmed = s.trim();
-  if (trimmed.startsWith("https://") || trimmed.startsWith("http://")) {
+  if (
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("/")
+  ) {
     return { remoteUrl: trimmed };
   }
 
   const m = /^data:([^;]+);base64,([\s\S]+)$/.exec(trimmed);
   if (!m) {
     throw new Error(
-      "imageDataUrlOrUrl must be a data:image/...;base64,... value or an https image URL",
+      "imageDataUrlOrUrl must be a data:image/...;base64,... value, app-relative path, or http/https image URL",
     );
   }
   const mime = m[1];
@@ -40,18 +44,62 @@ function parseImageRef(s: string): {
   return { buffer, mime, filename };
 }
 
+function extensionFromMime(mime: string): string {
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("png")) return "png";
+  return "bin";
+}
+
+function shouldUploadRemoteForAtlas(url: URL): boolean {
+  return (
+    url.protocol === "http:" ||
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    url.hostname === "::1" ||
+    url.hostname.endsWith(".local")
+  );
+}
+
+async function uploadRemoteImageToAtlas(
+  sourceUrl: string,
+  env: ReturnType<typeof getEnv>,
+): Promise<string> {
+  const apiKey = env.ATLASCLOUD_API_KEY;
+  if (!apiKey?.trim()) {
+    throw new Error(
+      "ATLASCLOUD_API_KEY is required to upload reference images for video generation",
+    );
+  }
+  const sourceRes = await fetch(sourceUrl);
+  if (!sourceRes.ok) {
+    throw new Error(`Failed to download reference image (${sourceRes.status})`);
+  }
+  const contentType = sourceRes.headers.get("content-type") ?? "image/png";
+  const ext = extensionFromMime(contentType);
+  const bytes = Buffer.from(await sourceRes.arrayBuffer());
+  const { downloadUrl } = await uploadMediaFile({
+    buffer: bytes,
+    filename: `reference.${ext}`,
+    contentType,
+    apiKey,
+    baseUrl: env.ATLASCLOUD_BASE_URL,
+  });
+  return downloadUrl;
+}
+
 async function resolveImageUrl(
   raw: string,
   req: Request,
 ): Promise<string | undefined> {
+  const env = getEnv();
   const ref = parseImageRef(raw);
-  if (!ref.remoteUrl && raw.trim().startsWith("/")) {
-    ref.remoteUrl = new URL(raw.trim(), req.url).toString();
+  if (ref.remoteUrl?.startsWith("/")) {
+    ref.remoteUrl = new URL(ref.remoteUrl, req.url).toString();
   }
 
   let imageUrl = ref.remoteUrl;
   if (ref.buffer && ref.mime && ref.filename) {
-    const env = getEnv();
     const apiKey = env.ATLASCLOUD_API_KEY;
     if (!apiKey?.trim()) {
       throw new Error(
@@ -66,6 +114,12 @@ async function resolveImageUrl(
       baseUrl: env.ATLASCLOUD_BASE_URL,
     });
     imageUrl = downloadUrl;
+  }
+  if (imageUrl) {
+    const url = new URL(imageUrl);
+    if (shouldUploadRemoteForAtlas(url)) {
+      imageUrl = await uploadRemoteImageToAtlas(imageUrl, env);
+    }
   }
   return imageUrl;
 }

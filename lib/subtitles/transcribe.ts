@@ -45,9 +45,9 @@ export async function transcribeVideoFromUrl(options: {
   maxCharsPerLine: number;
 }): Promise<TranscribeResult> {
   const env = getEnv();
-  const apiKey = env.WHISPER_API_KEY;
+  const apiKey = env.OPENAI_API_KEY;
   if (!apiKey?.trim()) {
-    throw new Error("WHISPER_API_KEY is required for subtitle transcription");
+    throw new Error("OPENAI_API_KEY is required for subtitle transcription");
   }
   if (!isHttpUrl(options.videoUrl)) {
     throw new Error("videoUrl must be an http/https URL");

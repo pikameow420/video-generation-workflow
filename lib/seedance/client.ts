@@ -68,6 +68,7 @@ export async function startVideoGeneration(params: {
   const body: Record<string, unknown> = {
     model: params.model,
     prompt: params.prompt,
+    reference_images: params.imageUrls,
     image_url: params.imageUrls[0],
     image_urls: params.imageUrls,
     width: params.width,

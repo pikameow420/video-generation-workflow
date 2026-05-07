@@ -15,7 +15,11 @@ const envSchema = z.object({
     .string()
     .default("data/captioned-videos.json"),
   SAVED_SCRIPT_INDEX_PATH: z.string().default("data/saved-scripts.json"),
-  WHISPER_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_IMAGE_MODEL: z.string().default("gpt-image-1.5"),
+  OPENAI_IMAGE_SIZE: z.string().default("1024x1536"),
+  OPENAI_IMAGE_QUALITY: z.string().default("auto"),
+  OPENAI_IMAGE_OUTPUT_FORMAT: z.enum(["png", "jpeg", "webp"]).default("png"),
   SUBTITLE_DEFAULT_LANGUAGE: z.string().default("en"),
   SUBTITLE_MAX_CHARS_PER_LINE: z.coerce.number().int().positive().default(38),
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
@@ -24,9 +28,6 @@ const envSchema = z.object({
   ATLASCLOUD_SCRIPT_MODEL: z
     .string()
     .default("deepseek-ai/deepseek-v4-pro"),
-  ATLASCLOUD_IMAGE_MODEL: z
-    .string()
-    .default("openai/gpt-image-2/text-to-image"),
   ATLASCLOUD_IMAGE_WIDTH: z.coerce.number().int().positive().default(1024),
   ATLASCLOUD_IMAGE_HEIGHT: z.coerce.number().int().positive().default(1792),
   ATLASCLOUD_VIDEO_MODEL: z

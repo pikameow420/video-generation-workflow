@@ -23,14 +23,14 @@ export function buildCharacterSheetPrompt(input: {
   return [
     ...CHARACTER_SHEET_BASE_RULES,
     refs.length
-      ? "Reference image grounding requirements:"
+      ? "Reference image grounding requirements (using attached reference images):"
       : null,
     ...refs.map(
-      (url, index) =>
-        `- Use reference image ${index + 1} as visual identity anchor: ${url}`,
+      (_url, index) =>
+        `- Use attached reference image ${index + 1} as a visual identity anchor.`,
     ),
     refs.length
-      ? "- Preserve the same core character identity and style from these references."
+      ? "- Preserve the same core character identity and style from all attached references."
       : null,
     "",
     `Script title: ${input.scriptTitle}`,

@@ -35,6 +35,10 @@ export const characterSheetRequestSchema = z.object({
   /** Optional uploaded reference image URLs to steer identity/style consistency. */
   referenceImageUrls: z.array(z.string().min(1)).max(9).optional(),
 });
+export const characterSheetResponseSchema = z.object({
+  mimeType: z.string().min(1),
+  imageDataUrl: z.string().min(1),
+});
 
 export const videoRequestSchema = z.object({
   scriptTitle: z.string().min(1),
@@ -43,6 +47,10 @@ export const videoRequestSchema = z.object({
   imageDataUrlOrUrl: z.string().min(1),
   /** Additional reference images to be used alongside imageDataUrlOrUrl. */
   referenceImageUrls: z.array(z.string().min(1)).max(9).optional(),
+});
+export const videoResponseSchema = z.object({
+  predictionId: z.string().min(1),
+  videoUrl: z.string().min(1),
 });
 
 export const referenceImageSchema = z.object({
@@ -107,4 +115,7 @@ export const transcribeSubtitlesResponseSchema = z.object({
 export const burnSubtitlesRequestSchema = z.object({
   videoUrl: z.string().min(1),
   srtText: z.string().min(1),
+});
+export const burnSubtitlesResponseSchema = z.object({
+  captionedVideoUrl: z.string().min(1),
 });

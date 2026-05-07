@@ -1,12 +1,14 @@
 # Agent Instructions
 
-This is a Next.js 16 app using the App Router, React 19, TypeScript, Tailwind, Zod, and Atlas Cloud APIs.
+This is a Next.js 16 app using the App Router, React 19, shadcn-ui, TypeScript, Tailwind, Zod, and Atlas Cloud APIs.
 
 Before editing Next.js code, check relevant docs in `node_modules/next/dist/docs/` because this version may differ from older Next.js conventions.
 
 ## Project Notes
 
-- Main UI lives in `components/PipelineWizard.tsx`.
+- Pipeline step UI lives under `components/pipeline/steps/*`.
+- Pipeline sidebar and shared pipeline types live under `components/pipeline/*`.
+- Shared shadcn-ui primitives live under `components/ui/*`.
 - Main page entry is `app/page.tsx`.
 - API routes live under `app/api/*/route.ts`.
 - Environment config is parsed in `lib/env.ts`.
