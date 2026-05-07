@@ -11,6 +11,7 @@ type VideoStepProps = {
   videoUrl: string | null;
   sheetUrl: string | null;
   subtitleSrt: string;
+  subtitleLanguage: "auto" | "en" | "hi";
   subtitleChars: number | null;
   captionedVideoUrl: string | null;
   videoMeta: { predictionId: string } | null;
@@ -18,6 +19,7 @@ type VideoStepProps = {
   onGoTopic: () => void;
   onGenerateSubtitles: () => void;
   onBurnSubtitles: () => void;
+  onSubtitleLanguageChange: (next: "auto" | "en" | "hi") => void;
   onSubtitleSrtChange: (next: string) => void;
 };
 
@@ -27,6 +29,7 @@ export function VideoStep({
   videoUrl,
   sheetUrl,
   subtitleSrt,
+  subtitleLanguage,
   subtitleChars,
   captionedVideoUrl,
   videoMeta,
@@ -34,6 +37,7 @@ export function VideoStep({
   onGoTopic,
   onGenerateSubtitles,
   onBurnSubtitles,
+  onSubtitleLanguageChange,
   onSubtitleSrtChange,
 }: VideoStepProps) {
   return (
@@ -91,6 +95,21 @@ export function VideoStep({
                 Post-Generation Subtitles
               </p>
               <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-xs text-zinc-500">
+                  Caption language
+                  <select
+                    value={subtitleLanguage}
+                    onChange={(e) =>
+                      onSubtitleLanguageChange(e.target.value as "auto" | "en" | "hi")
+                    }
+                    disabled={busy}
+                    className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                  >
+                    <option value="auto">Auto detect</option>
+                    <option value="en">English</option>
+                    <option value="hi">Hindi</option>
+                  </select>
+                </label>
                 <Button
                   type="button"
                   variant="outline"

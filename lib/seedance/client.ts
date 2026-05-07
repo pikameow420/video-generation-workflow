@@ -42,6 +42,268 @@ export async function uploadMediaFile(params: {
   return { downloadUrl: url };
 }
 
+export async function createAtlasAssetFromUrl(params: {
+  sourceUrl: string;
+  name: string;
+  consoleBaseUrl: string;
+  accessToken: string;
+  accountId: string;
+}): Promise<{
+  assetRef: string;
+  status?: string;
+  numericId?: number;
+  arkAssetId?: string;
+}> {
+  const res = await fetch(`${params.consoleBaseUrl}/api/v1/sd/assets`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-account-id": params.accountId,
+      Authorization: `Bearer ${params.accessToken}`,
+      Cookie: `access-token=${params.accessToken}`,
+    },
+    body: JSON.stringify({
+      url: params.sourceUrl,
+      name: params.name,
+    }),
+  });
+
+  const text = await res.text();
+  let parsed:
+    | {
+        code?: string | number;
+        data?: { ark_asset_id?: string; status?: string; id?: number };
+      }
+    | null = null;
+  try {
+    parsed = JSON.parse(text) as {
+      code?: string | number;
+      data?: { ark_asset_id?: string; status?: string; id?: number };
+    };
+  } catch {
+    parsed = null;
+  }
+
+  if (!res.ok || !parsed) {
+    throw new Error(`Atlas asset create failed (${res.status}): ${text}`);
+  }
+
+  const code = String(parsed.code ?? "");
+  if (code && code !== "200") {
+    throw new Error(`Atlas asset create failed (${res.status}): ${text}`);
+  }
+
+  const arkAssetId = parsed.data?.ark_asset_id;
+  if (!arkAssetId) {
+    throw new Error("Atlas asset create: missing data.ark_asset_id");
+  }
+  return {
+    assetRef: `asset://${arkAssetId}`,
+    status: parsed.data?.status,
+    numericId: parsed.data?.id,
+    arkAssetId,
+  };
+}
+
+type AtlasAssetStatusResult = {
+  status?: string;
+  arkAssetId?: string;
+  numericId?: number;
+};
+
+function normalizeAssetStatus(status: string | undefined): string {
+  return (status ?? "").trim().toLowerCase();
+}
+
+function isAssetReady(status: string | undefined): boolean {
+  const value = normalizeAssetStatus(status);
+  return (
+    value === "active" ||
+    value === "ready" ||
+    value === "completed" ||
+    value === "succeeded" ||
+    value === "success"
+  );
+}
+
+function isAssetFailed(status: string | undefined): boolean {
+  const value = normalizeAssetStatus(status);
+  return value === "failed" || value === "error" || value === "rejected";
+}
+
+async function readAssetStatusViaEndpoint(
+  endpoint: string,
+  params: {
+    accessToken: string;
+    accountId: string;
+  },
+): Promise<AtlasAssetStatusResult | null> {
+  const res = await fetch(endpoint, {
+    headers: {
+      "x-account-id": params.accountId,
+      Authorization: `Bearer ${params.accessToken}`,
+      Cookie: `access-token=${params.accessToken}`,
+    },
+  });
+  if (!res.ok) return null;
+
+  const text = await res.text();
+  let parsed:
+    | {
+        data?:
+          | { status?: string; ark_asset_id?: string }
+          | Array<{ status?: string; ark_asset_id?: string }>;
+      }
+    | null = null;
+  try {
+    parsed = JSON.parse(text) as {
+      data?:
+        | { status?: string; ark_asset_id?: string }
+        | Array<{ status?: string; ark_asset_id?: string }>;
+    };
+  } catch {
+    return null;
+  }
+
+  if (!parsed?.data) return null;
+  const first = Array.isArray(parsed.data) ? parsed.data[0] : parsed.data;
+  if (!first) return null;
+  return {
+    status: first.status,
+    arkAssetId: first.ark_asset_id,
+  };
+}
+
+async function readAssetStatusFromPagedList(params: {
+  consoleBaseUrl: string;
+  accessToken: string;
+  accountId: string;
+  pageSize: number;
+  numericId?: number;
+  arkAssetId?: string;
+}): Promise<AtlasAssetStatusResult | null> {
+  const base = params.consoleBaseUrl.replace(/\/+$/, "");
+  const headers = {
+    "x-account-id": params.accountId,
+    Authorization: `Bearer ${params.accessToken}`,
+    Cookie: `access-token=${params.accessToken}`,
+  };
+
+  let pageNumber = 1;
+  let totalCount = 0;
+  do {
+    const endpoint = `${base}/api/v1/sd/assets?page_number=${pageNumber}&page_size=${params.pageSize}`;
+    const res = await fetch(endpoint, { headers });
+    if (!res.ok) return null;
+    const text = await res.text();
+    let parsed:
+      | {
+          data?: {
+            items?: Array<{
+              id?: number;
+              ark_asset_id?: string;
+              status?: string;
+            }>;
+            total_count?: number;
+            page_number?: number;
+            page_size?: number;
+          };
+        }
+      | null = null;
+    try {
+      parsed = JSON.parse(text) as {
+        data?: {
+          items?: Array<{
+            id?: number;
+            ark_asset_id?: string;
+            status?: string;
+          }>;
+          total_count?: number;
+          page_number?: number;
+          page_size?: number;
+        };
+      };
+    } catch {
+      return null;
+    }
+
+    const items = parsed?.data?.items ?? [];
+    const match = items.find((item) => {
+      if (params.numericId && item.id === params.numericId) return true;
+      if (params.arkAssetId && item.ark_asset_id === params.arkAssetId) return true;
+      return false;
+    });
+    if (match) {
+      return {
+        status: match.status,
+        arkAssetId: match.ark_asset_id,
+        numericId: match.id,
+      };
+    }
+
+    totalCount = parsed?.data?.total_count ?? 0;
+    const pageSize = parsed?.data?.page_size ?? params.pageSize;
+    const pageCount = Math.max(1, Math.ceil(totalCount / Math.max(1, pageSize)));
+    pageNumber += 1;
+    if (pageNumber > pageCount) break;
+  } while (true);
+
+  return null;
+}
+
+export async function waitForAtlasAssetReady(params: {
+  consoleBaseUrl: string;
+  accessToken: string;
+  accountId: string;
+  numericId?: number;
+  arkAssetId?: string;
+  pollIntervalMs: number;
+  pollMaxMs: number;
+  initialStatus?: string;
+}): Promise<void> {
+  if (isAssetReady(params.initialStatus)) return;
+  if (isAssetFailed(params.initialStatus)) {
+    throw new Error(`Atlas asset status is ${params.initialStatus}`);
+  }
+
+  const deadline = Date.now() + params.pollMaxMs;
+  while (Date.now() < deadline) {
+    if (!params.numericId) {
+      await new Promise((r) => setTimeout(r, params.pollIntervalMs));
+      continue;
+    }
+
+    const byList = await readAssetStatusFromPagedList({
+      consoleBaseUrl: params.consoleBaseUrl,
+      accessToken: params.accessToken,
+      accountId: params.accountId,
+      pageSize: 100,
+      numericId: params.numericId,
+      arkAssetId: params.arkAssetId,
+    });
+    const base = params.consoleBaseUrl.replace(/\/+$/, "");
+    const byId =
+      byList ??
+      (await readAssetStatusViaEndpoint(
+        `${base}/api/v1/sd/assets/${params.numericId ?? ""}`,
+        {
+          accessToken: params.accessToken,
+          accountId: params.accountId,
+        },
+      ));
+
+    const status = byId?.status;
+    if (isAssetReady(status)) return;
+    if (isAssetFailed(status)) {
+      throw new Error(`Atlas asset status is ${status}`);
+    }
+
+    await new Promise((r) => setTimeout(r, params.pollIntervalMs));
+  }
+
+  throw new Error("Atlas asset is still processing. Please retry in a minute.");
+}
+
 function extractPredictionId(json: unknown): string {
   const rec = json as { data?: { id?: string }; id?: string };
   const id = rec.data?.id ?? rec.id;

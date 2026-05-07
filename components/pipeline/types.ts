@@ -24,6 +24,7 @@ export type ReferenceImage = {
 
 export type Step = "topic" | "scripts" | "sheet" | "video";
 export type ScriptMode = "generate" | "manual";
+export type SubtitleLanguage = "auto" | "en" | "hi";
 
 export type WizardSnapshot = {
   isScriptSidebarOpen: boolean;
@@ -47,6 +48,7 @@ export type WizardSnapshot = {
   videoUrl: string | null;
   videoMeta: { predictionId: string } | null;
   videoStatus: string;
+  subtitleLanguage: SubtitleLanguage;
   subtitleSrt: string;
   subtitleChars: number | null;
   captionedVideoUrl: string | null;

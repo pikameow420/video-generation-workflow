@@ -14,6 +14,7 @@ import type {
   ScriptOption,
   SheetScriptHistoryEntry,
   Step,
+  SubtitleLanguage,
   WizardSnapshot,
 } from "@/components/pipeline/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -34,6 +35,7 @@ import {
   videoResponseSchema,
 } from "@/lib/schemas";
 import { Check } from "lucide-react";
+import { toast } from "sonner";
 
 const MAX_MANUAL_SCRIPT_FILE_BYTES = 256 * 1024;
 const WIZARD_STORAGE_KEY = "video-pipeline-wizard-state-v1";
@@ -96,6 +98,8 @@ export function PipelineWizard() {
     null,
   );
   const [videoStatus, setVideoStatus] = useState("");
+  const [subtitleLanguage, setSubtitleLanguage] =
+    useState<SubtitleLanguage>("auto");
   const [subtitleSrt, setSubtitleSrt] = useState("");
   const [subtitleChars, setSubtitleChars] = useState<number | null>(null);
   const [captionedVideoUrl, setCaptionedVideoUrl] = useState<string | null>(
@@ -105,7 +109,10 @@ export function PipelineWizard() {
   const [error, setError] = useState<string | null>(null);
 
   const runApiAction = useApiAction({
-    onError: (message) => setError(message),
+    onError: (message) => {
+      setError(message);
+      toast.error(message);
+    },
     setBusy,
     clearError: () => setError(null),
   });
@@ -139,6 +146,7 @@ export function PipelineWizard() {
       videoUrl,
       videoMeta,
       videoStatus,
+      subtitleLanguage,
       subtitleSrt,
       subtitleChars,
       captionedVideoUrl,
@@ -165,6 +173,7 @@ export function PipelineWizard() {
       videoUrl,
       videoMeta,
       videoStatus,
+      subtitleLanguage,
       subtitleSrt,
       subtitleChars,
       captionedVideoUrl,
@@ -203,6 +212,9 @@ export function PipelineWizard() {
     if (loaded.videoUrl !== undefined) setVideoUrl(loaded.videoUrl);
     if (loaded.videoMeta !== undefined) setVideoMeta(loaded.videoMeta);
     if (loaded.videoStatus !== undefined) setVideoStatus(loaded.videoStatus);
+    if (loaded.subtitleLanguage !== undefined) {
+      setSubtitleLanguage(loaded.subtitleLanguage);
+    }
     if (loaded.subtitleSrt !== undefined) setSubtitleSrt(loaded.subtitleSrt);
     if (loaded.subtitleChars !== undefined) setSubtitleChars(loaded.subtitleChars);
     if (loaded.captionedVideoUrl !== undefined) {
@@ -333,6 +345,7 @@ export function PipelineWizard() {
   );
 
   const generateScripts = useCallback(async () => {
+    toast.info("Generating scripts...");
     await runApiAction(async () => {
       const data = await postJson(
         "/api/scripts",
@@ -354,6 +367,7 @@ export function PipelineWizard() {
       setStep("scripts");
       await loadReferenceImages();
       await loadSavedScripts();
+      toast.success("Scripts generated.");
     }, "Request failed");
   }, [
     audience,
@@ -375,6 +389,7 @@ export function PipelineWizard() {
       return;
     }
 
+    toast.info("Preparing script...");
     await runApiAction(async () => {
       setScripts(null);
       setSelectedId(null);
@@ -391,6 +406,7 @@ export function PipelineWizard() {
       await loadReferenceImages();
       await loadSavedScripts();
       setStep("scripts");
+      toast.success("Script is ready.");
     }, "Failed to continue");
   }, [
     loadReferenceImages,
@@ -490,6 +506,7 @@ export function PipelineWizard() {
   }, [scriptEdit, scripts]);
 
   const generateSheet = useCallback(async () => {
+    toast.info("Generating character sheet...");
     await runApiAction(async () => {
       await maybeSaveGeneratedScript();
       const data = await postJson(
@@ -509,6 +526,7 @@ export function PipelineWizard() {
       setSheetSource("generated");
       trackSheetScriptSelection();
       setStep("sheet");
+      toast.success("Character sheet generated.");
     }, "Request failed");
   }, [
     artDirection,
@@ -521,6 +539,7 @@ export function PipelineWizard() {
 
   const startVideo = useCallback(async () => {
     if (!sheetUrl) return;
+    toast.info("Preparing references and starting video job...");
     await runApiAction(async () => {
       setVideoUrl(null);
       setVideoMeta(null);
@@ -545,6 +564,7 @@ export function PipelineWizard() {
       setVideoUrl(data.videoUrl);
       setVideoMeta({ predictionId: data.predictionId });
       setVideoStatus("Done.");
+      toast.success("Video generated.");
     }, "Request failed");
   }, [runApiAction, scriptEdit, selectedReferenceUrls, sheetUrl]);
 
@@ -554,6 +574,7 @@ export function PipelineWizard() {
       e.currentTarget.value = "";
       if (!file) return;
 
+      toast.info("Uploading reference image...");
       await runApiAction(async () => {
         const formData = new FormData();
         formData.set("file", file);
@@ -568,6 +589,7 @@ export function PipelineWizard() {
           dedupeReferenceUrls([String(data.url), ...prev]),
         );
         await loadReferenceImages();
+        toast.success("Reference image uploaded.");
       }, "Upload failed");
     },
     [loadReferenceImages, runApiAction],
@@ -598,10 +620,11 @@ export function PipelineWizard() {
 
   const generateSubtitles = useCallback(async () => {
     if (!videoUrl) return;
+    toast.info("Generating subtitles...");
     await runApiAction(async () => {
       const data = await postJson(
         "/api/subtitles/transcribe",
-        { videoUrl },
+        { videoUrl, language: subtitleLanguage },
         "Subtitle generation failed",
         transcribeSubtitlesResponseSchema,
       );
@@ -609,11 +632,13 @@ export function PipelineWizard() {
       setSubtitleSrt(data.srtText);
       setSubtitleChars(data.estimatedChars ?? null);
       setCaptionedVideoUrl(null);
+      toast.success("Subtitles generated.");
     }, "Subtitle generation failed");
-  }, [runApiAction, videoUrl]);
+  }, [runApiAction, subtitleLanguage, videoUrl]);
 
   const burnSubtitles = useCallback(async () => {
     if (!videoUrl || !subtitleSrt.trim()) return;
+    toast.info("Burning subtitles into video...");
     await runApiAction(async () => {
       const data = await postJson(
         "/api/subtitles/burn",
@@ -623,6 +648,7 @@ export function PipelineWizard() {
       );
       if (!data.captionedVideoUrl) throw new Error("Caption burn failed");
       setCaptionedVideoUrl(data.captionedVideoUrl);
+      toast.success("Captioned video ready.");
     }, "Caption burn failed");
   }, [runApiAction, subtitleSrt, videoUrl]);
 
@@ -739,6 +765,7 @@ export function PipelineWizard() {
           videoUrl={videoUrl}
           sheetUrl={sheetUrl}
           subtitleSrt={subtitleSrt}
+          subtitleLanguage={subtitleLanguage}
           subtitleChars={subtitleChars}
           captionedVideoUrl={captionedVideoUrl}
           videoMeta={videoMeta}
@@ -746,6 +773,7 @@ export function PipelineWizard() {
           onGoTopic={() => setStep("topic")}
           onGenerateSubtitles={() => void generateSubtitles()}
           onBurnSubtitles={() => void burnSubtitles()}
+          onSubtitleLanguageChange={setSubtitleLanguage}
           onSubtitleSrtChange={setSubtitleSrt}
         />
       ) : null}

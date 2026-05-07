@@ -22,9 +22,19 @@ const envSchema = z.object({
   OPENAI_IMAGE_OUTPUT_FORMAT: z.enum(["png", "jpeg", "webp"]).default("png"),
   SUBTITLE_DEFAULT_LANGUAGE: z.string().default("en"),
   SUBTITLE_MAX_CHARS_PER_LINE: z.coerce.number().int().positive().default(38),
+  SUBTITLE_MAX_SECONDS_PER_CUE: z.coerce.number().positive().default(2.2),
+  SUBTITLE_MAX_WORDS_PER_CUE: z.coerce.number().int().positive().default(7),
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
   ATLASCLOUD_API_KEY: z.string().optional(),
   ATLASCLOUD_BASE_URL: z.string().url().default("https://api.atlascloud.ai"),
+  ATLASCLOUD_CONSOLE_BASE_URL: z
+    .string()
+    .url()
+    .default("https://console.atlascloud.ai"),
+  ATLASCLOUD_CONSOLE_ACCESS_TOKEN: z.string().optional(),
+  ATLASCLOUD_CONSOLE_ACCOUNT_ID: z.string().optional(),
+  ATLASCLOUD_ASSET_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(3000),
+  ATLASCLOUD_ASSET_POLL_MAX_MS: z.coerce.number().int().positive().default(120000),
   ATLASCLOUD_SCRIPT_MODEL: z
     .string()
     .default("deepseek-ai/deepseek-v4-pro"),
@@ -34,7 +44,7 @@ const envSchema = z.object({
     .string()
     .default("bytedance/seedance-2.0-fast/reference-to-video"),
   ATLASCLOUD_VIDEO_DURATION: z.coerce.number().int().positive().default(15),
-  ATLASCLOUD_VIDEO_RESOLUTION: z.string().default("720p"),
+  ATLASCLOUD_VIDEO_RESOLUTION: z.string().default("480p"),
   ATLASCLOUD_VIDEO_RATIO: z.string().default("9:16"),
   ATLASCLOUD_VIDEO_WIDTH: z.coerce.number().int().positive().default(720),
   ATLASCLOUD_VIDEO_HEIGHT: z.coerce.number().int().positive().default(1280),

@@ -29,12 +29,23 @@ export async function POST(req: Request) {
     const env = getEnv();
     const maxCharsPerLine =
       body.maxCharsPerLine ?? env.SUBTITLE_MAX_CHARS_PER_LINE;
+    const maxSecondsPerCue = env.SUBTITLE_MAX_SECONDS_PER_CUE;
+    const maxWordsPerCue = env.SUBTITLE_MAX_WORDS_PER_CUE;
+    const requestedLanguage = body.language?.trim().toLowerCase();
+    const language =
+      requestedLanguage === undefined
+        ? env.SUBTITLE_DEFAULT_LANGUAGE
+        : requestedLanguage === "" || requestedLanguage === "auto"
+          ? undefined
+          : requestedLanguage;
     const videoUrl = resolveVideoUrl(body.videoUrl, req.url);
 
     const result = await transcribeVideoFromUrl({
       videoUrl,
-      language: body.language ?? env.SUBTITLE_DEFAULT_LANGUAGE,
+      language,
       maxCharsPerLine,
+      maxSecondsPerCue,
+      maxWordsPerCue,
     });
     const response = transcribeSubtitlesResponseSchema.parse({
       cues: result.cues,

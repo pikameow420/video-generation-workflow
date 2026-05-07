@@ -41,6 +41,16 @@ async function ensureFfmpegExists(): Promise<void> {
   await execFileAsync("ffmpeg", ["-version"]);
 }
 
+async function ensureSubtitleFilterExists(): Promise<void> {
+  const { stdout } = await execFileAsync("ffmpeg", ["-hide_banner", "-filters"]);
+  const hasSubtitlesFilter = /(^|\n).*\bsubtitles\b/m.test(stdout);
+  if (!hasSubtitlesFilter) {
+    throw new Error(
+      "Your ffmpeg build does not include the subtitles filter (libass). Install/rebuild ffmpeg with libass support, then retry subtitle burn.",
+    );
+  }
+}
+
 export async function POST(req: Request) {
   const tmpPrefix = path.join(os.tmpdir(), `subtitle-burn-${randomUUID()}`);
   const inputPath = `${tmpPrefix}-in.mp4`;
@@ -52,6 +62,7 @@ export async function POST(req: Request) {
     const body = burnSubtitlesRequestSchema.parse(json);
     const resolvedVideoUrl = resolveVideoUrl(body.videoUrl, req.url);
     await ensureFfmpegExists();
+    await ensureSubtitleFilterExists();
 
     const res = await fetch(resolvedVideoUrl);
     if (!res.ok) {
@@ -62,7 +73,7 @@ export async function POST(req: Request) {
     await writeFile(srtPath, body.srtText, "utf8");
 
     const style = ffmpegSubtitleStyle(INSTAGRAM_SUBTITLE_STYLE);
-    const vf = `subtitles='${escapeFfmpegPath(srtPath)}':force_style='${style}'`;
+    const vf = `subtitles=filename='${escapeFfmpegPath(srtPath)}':force_style='${style}'`;
 
     await execFileAsync("ffmpeg", [
       "-y",
