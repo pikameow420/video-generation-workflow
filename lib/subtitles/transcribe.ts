@@ -99,6 +99,7 @@ function normalizeCues(
 export async function transcribeVideoFromUrl(options: {
   videoUrl: string;
   language?: string;
+  prompt?: string;
   maxCharsPerLine: number;
   maxSecondsPerCue: number;
   maxWordsPerCue: number;
@@ -126,6 +127,7 @@ export async function transcribeVideoFromUrl(options: {
     model: "whisper-1",
     response_format: "verbose_json",
     language: options.language || undefined,
+    prompt: options.prompt?.trim() ? options.prompt.trim() : undefined,
     temperature: 0,
     timestamp_granularities: ["segment"],
   })) as unknown as {

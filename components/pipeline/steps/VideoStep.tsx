@@ -11,7 +11,7 @@ type VideoStepProps = {
   videoUrl: string | null;
   sheetUrl: string | null;
   subtitleSrt: string;
-  subtitleLanguage: "auto" | "en" | "hi";
+  subtitleLanguage: "auto" | "en" | "hi" | "hinglish";
   subtitleChars: number | null;
   captionedVideoUrl: string | null;
   videoMeta: { predictionId: string } | null;
@@ -19,7 +19,7 @@ type VideoStepProps = {
   onGoTopic: () => void;
   onGenerateSubtitles: () => void;
   onBurnSubtitles: () => void;
-  onSubtitleLanguageChange: (next: "auto" | "en" | "hi") => void;
+  onSubtitleLanguageChange: (next: "auto" | "en" | "hi" | "hinglish") => void;
   onSubtitleSrtChange: (next: string) => void;
 };
 
@@ -100,7 +100,9 @@ export function VideoStep({
                   <select
                     value={subtitleLanguage}
                     onChange={(e) =>
-                      onSubtitleLanguageChange(e.target.value as "auto" | "en" | "hi")
+                      onSubtitleLanguageChange(
+                        e.target.value as "auto" | "en" | "hi" | "hinglish",
+                      )
                     }
                     disabled={busy}
                     className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
@@ -108,6 +110,7 @@ export function VideoStep({
                     <option value="auto">Auto detect</option>
                     <option value="en">English</option>
                     <option value="hi">Hindi</option>
+                    <option value="hinglish">Hinglish (Roman Hindi)</option>
                   </select>
                 </label>
                 <Button

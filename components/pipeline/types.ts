@@ -24,7 +24,7 @@ export type ReferenceImage = {
 
 export type Step = "topic" | "scripts" | "sheet" | "video";
 export type ScriptMode = "generate" | "manual";
-export type SubtitleLanguage = "auto" | "en" | "hi";
+export type SubtitleLanguage = "auto" | "en" | "hi" | "hinglish";
 
 export type WizardSnapshot = {
   isScriptSidebarOpen: boolean;
