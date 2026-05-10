@@ -1,82 +1,99 @@
-# AI Social Media Video Pipeline
+# AI Video Pipeline
 
-This is a small Next.js app for turning a creator topic into a short social video.
-The intended flow is:
+A **Next.js app** for solo creators: go from a topic (or your own script) to a **short vertical video** with optional **captions burned in**.
 
-1. Generate four short script options.
-2. Pick or edit one script.
-3. Generate a 3x3 character sheet.
-4. Use the character sheet as the reference image for a Seedance video.
+The UI is a **four-step wizard**: topic & scripts → pick or edit a script & references → character sheet → generate video, then transcribe and burn subtitles if you want.
 
-The product is currently an early prototype. It is useful for testing the happy
-path, but several "real user" pieces are intentionally not finished yet.
+---
 
-## Current Gaps
+## What you can do in the app
 
-- No authentication or team/user ownership yet.
-- Script preferences are entered per session; there is no saved base prompt.
-- Generated video jobs are not persisted, so users cannot leave and resume.
-- Error messages are basic and mostly surface provider failures directly.
 
-## Implementation Notes
+|                     |                                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scripts**         | Generate **four** options via Deepseek, paste/upload your own, or pull from a **saved script library** (stored on disk / JSON index).                   |
+| **Voice & brand**   | **Base prompt**, **brand kit**, and **named presets** (topic, tone, audience, notes, art direction, etc.)—presets live in the browser’s `localStorage`. |
+| **Look**            | Generate a **3×3 character sheet** from the script (OpenAI image 2), optionally steer with **reference images** from your library.                      |
+| **Video**           | **Seedance** (Atlas Cloud & soon muAPI) reference-to-video using the sheet; poll until the clip is ready.                                               |
+| **Captions**        | Transcribe with **OpenAI**, tweak SRT, **burn subtitles** with **ffmpeg**—English, Hindi, or Hinglish-friendly flow.                                    |
+| **Session restore** | Wizard state is **autosaved** in `localStorage` so a refresh doesn’t wipe your in-progress pipeline.                                                    |
 
-- Main UI: `components/PipelineWizard.tsx`
-- Script generation endpoint: `app/api/scripts/route.ts`
-- Character sheet endpoint: `app/api/character-sheet/route.ts`
-- Video endpoint: `app/api/video/route.ts`
-- Environment parsing: `lib/env.ts`
-- Request validation: `lib/schemas.ts`
-- Seedance helpers: `lib/seedance/client.ts`
 
-The app uses Atlas Cloud for script, image, and video generation. The model names
-and base URL can be configured in `.env`.
+---
 
-Reference image uploads can be configured with:
+## The flow (end to end)
 
-- `UPLOAD_BACKEND=local` to persist files in `public/uploads/reference-images`.
-- `UPLOAD_BACKEND=blob` to persist files in Vercel Blob.
-- `REFERENCE_IMAGE_INDEX_PATH` to control where upload metadata is indexed.
+1. **Topic** — Generate scripts or bring your own; optional presets and brand kit.
+2. **Scripts** — Choose one line, edit if needed, set **art direction**, attach reference images.
+3. **Sheet** — Review the generated (or uploaded) character sheet.
+4. **Video** — Start generation, wait for the file, then **generate subtitles** and **burn** them into the video.
 
-The upload API accepts `multipart/form-data` and currently enforces a 10MB max size
-for `image/jpeg`, `image/png`, and `image/webp`.
+---
 
-Post-generation subtitles are configured with:
+## Stack
 
-- `OPENAI_API_KEY` for transcript generation.
-- `SUBTITLE_DEFAULT_LANGUAGE` and `SUBTITLE_MAX_CHARS_PER_LINE` for caption formatting.
-- `LOCAL_CAPTIONED_VIDEO_DIR`, `LOCAL_CAPTIONED_VIDEO_BASE_PATH`, and `CAPTIONED_VIDEO_INDEX_PATH` for storing burned videos in local mode.
+- **Next.js 16** (App Router), **React 19**, **TypeScript**, **Tailwind**, **shadcn-style UI**, **Zod** for API validation  
+- **Atlas Cloud** — chat for scripts, Seedance for video  
+- **OpenAI** — character sheet images + transcription (when configured)  
+- **ffmpeg** — caption burn-in (must be available on the machine running the burn route)
 
-Runtime note: subtitle burn-in requires `ffmpeg` installed on the runtime host.
-If your serverless target cannot run ffmpeg binaries, run burn-in in a worker/container instead.
+---
 
-## Getting Started
+## Project map
 
-First, run the development server:
+
+| Area                             | Location                                 |
+| -------------------------------- | ---------------------------------------- |
+| Main wizard UI                   | `components/pipeline/PipelineWizard.tsx` |
+| Step screens                     | `components/pipeline/steps/*`            |
+| Script API                       | `app/api/scripts/route.ts`               |
+| Character sheet API              | `app/api/character-sheet/route.ts`       |
+| Video API                        | `app/api/video/route.ts`                 |
+| Env & defaults                   | `lib/env.ts`                             |
+| Request/response schemas         | `lib/schemas.ts`                         |
+| Seedance / Atlas helpers         | `lib/seedance/client.ts`                 |
+| Creator presets (client storage) | `lib/pipeline/creator-presets.ts`        |
+
+
+---
+
+## Configuration
+
+Copy env vars your deployment needs (see `**lib/env.ts`** for the full list and defaults). Minimally, for the full happy path:
+
+- `**ATLASCLOUD_API_KEY**` — scripts + video (required for those features)
+- `**OPENAI_API_KEY**` — character sheet + transcription (optional but needed for those steps)
+- `**UPLOAD_BACKEND**` — `local` (default) or `blob` for Vercel Blob reference uploads
+
+**Reference images (local mode):** files under `public/uploads/reference-images`, index path configurable via `REFERENCE_IMAGE_INDEX_PATH`.
+
+**Captioned videos (local mode):** `LOCAL_CAPTIONED_VIDEO_DIR`, `CAPTIONED_VIDEO_BASE_PATH`, `CAPTIONED_VIDEO_INDEX_PATH`.
+
+**Runtime:** subtitle burn-in expects `**ffmpeg`** on the host. Serverless without ffmpeg won’t be able to burn captions unless you offload that step.
+
+---
+
+## Run it locally
 
 ```bash
+npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Set `ATLASCLOUD_API_KEY` and `OPENAI_API_KEY` in `.env` first.
 
-Create a local `.env` file using `.env.example` as a starting point and set an
-Atlas Cloud API key before using the generation endpoints.
+```bash
+npm run lint
+```
 
-## Notes for Future Work
+---
 
-The next product pass should make the creation flow feel more trustworthy and
-ready for real users without changing the basic script-to-video journey too much.
-The exact scope is intentionally open: authentication, saved prompt preferences,
-uploading reference images, better recovery states, and job history are all
-possible directions.
+## Limitations
 
-## Learn More
+There’s **no auth** or multi-user accounts yet. **Presets** are per-browser, not synced across devices. Long **video jobs** aren’t a persisted job queue—don’t close the tab for minutes-long runs. Errors are mostly **provider messages** surfaced to the UI.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Atlas Cloud](https://www.atlascloud.ai/) - model hosting used by this prototype.
+---
 
-## Deploy on Vercel
+## Deploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Works on **Vercel** like any Next.js app; ensure secrets match your chosen upload backend and that anything that needs **ffmpeg** runs where that binary exists (or skip burn-in in constrained runtimes).
