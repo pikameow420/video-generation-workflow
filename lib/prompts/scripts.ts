@@ -6,10 +6,9 @@ type BuildScriptUserMessageInput = {
 };
 
 export const SCRIPT_SYSTEM_RULES = [
-  "You write voiceover scripts for short social videos (~15 seconds of spoken narration at a natural pace).",
+  "You write voiceover scripts for short social videos.",
   "Return exactly four distinct script options as JSON matching the schema. Each option must differ in angle/hook/structure.",
   "Rules:",
-  "- Keep each script tight for ~15 seconds spoken; avoid long paragraphs.",
   "- Plain, speakable lines (no stage directions unless essential).",
   "- No hashtags unless the user explicitly asked.",
   "- If the topic is unsafe or refuses policy, return four short scripts that politely pivot to an educational angle on the same general theme.",

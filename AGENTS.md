@@ -7,7 +7,6 @@ Before editing Next.js code, check relevant docs in `node_modules/next/dist/docs
 ## Project Notes
 
 - Pipeline step UI lives under `components/pipeline/steps/*`.
-- Pipeline sidebar and shared pipeline types live under `components/pipeline/*`.
 - Shared shadcn-ui primitives live under `components/ui/*`.
 - Main page entry is `app/page.tsx`.
 - API routes live under `app/api/*/route.ts`.
