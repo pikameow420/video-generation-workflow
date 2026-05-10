@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useCallback, useMemo, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { ScriptHistorySidebar } from "@/components/pipeline/ScriptHistorySidebar";
 import { ScriptsStep } from "@/components/pipeline/steps/ScriptsStep";
@@ -23,6 +23,12 @@ import { Card } from "@/components/ui/card";
 import { useApiAction } from "@/hooks/useApiAction";
 import { useWizardLocalStorage } from "@/hooks/useWizardLocalStorage";
 import { getJson, postForm, postJson } from "@/lib/api/client";
+import {
+  addCreatorPreset,
+  loadCreatorPresets,
+  removeCreatorPreset,
+  type CreatorPreset,
+} from "@/lib/pipeline/creator-presets";
 import {
   burnSubtitlesResponseSchema,
   characterSheetResponseSchema,
@@ -66,6 +72,8 @@ export function PipelineWizard() {
   const [audience, setAudience] = useState("");
   const [notes, setNotes] = useState("");
   const [basePrompt, setBasePrompt] = useState("");
+  const [brandKit, setBrandKit] = useState("");
+  const [presets, setPresets] = useState<CreatorPreset[]>([]);
   const [scriptMode, setScriptMode] = useState<ScriptMode>("generate");
   const [saveManualScript, setSaveManualScript] = useState(true);
   const [manualScriptSource, setManualScriptSource] = useState<
@@ -132,6 +140,7 @@ export function PipelineWizard() {
       audience,
       notes,
       basePrompt,
+      brandKit,
       scriptMode,
       saveManualScript,
       manualScriptSource,
@@ -159,6 +168,7 @@ export function PipelineWizard() {
       audience,
       notes,
       basePrompt,
+      brandKit,
       scriptMode,
       saveManualScript,
       manualScriptSource,
@@ -190,6 +200,7 @@ export function PipelineWizard() {
     if (loaded.audience !== undefined) setAudience(loaded.audience);
     if (loaded.notes !== undefined) setNotes(loaded.notes);
     if (loaded.basePrompt !== undefined) setBasePrompt(loaded.basePrompt);
+    if (loaded.brandKit !== undefined) setBrandKit(loaded.brandKit);
     if (loaded.scriptMode) setScriptMode(loaded.scriptMode);
     if (loaded.saveManualScript !== undefined) {
       setSaveManualScript(loaded.saveManualScript);
@@ -227,6 +238,58 @@ export function PipelineWizard() {
     restore: restoreSnapshot,
     snapshot,
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setPresets(loadCreatorPresets());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const applyCreatorPreset = useCallback((p: CreatorPreset) => {
+    setTopic(p.topic);
+    setTone(p.tone);
+    setAudience(p.audience);
+    setNotes(p.notes);
+    setBasePrompt(p.basePrompt);
+    setBrandKit(p.brandKit);
+    setArtDirection(p.artDirection);
+    toast.success(`Loaded “${p.name}”`);
+  }, []);
+
+  const saveCreatorPresetFromForm = useCallback(
+    (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        toast.error("Name your preset first");
+        return;
+      }
+      const preset: CreatorPreset = {
+        id: crypto.randomUUID(),
+        name: trimmed.slice(0, 80),
+        createdAt: new Date().toISOString(),
+        topic,
+        tone,
+        audience,
+        notes,
+        basePrompt,
+        artDirection,
+        brandKit,
+      };
+      setPresets(addCreatorPreset(preset));
+      toast.success("Preset saved");
+    },
+    [topic, tone, audience, notes, basePrompt, artDirection, brandKit],
+  );
+
+  const deleteCreatorPresetById = useCallback((id: string) => {
+    if (!id) return;
+    setPresets(removeCreatorPreset(id));
+    toast.success("Preset removed");
+  }, []);
 
   const loadReferenceImages = useCallback(async () => {
     try {
@@ -355,6 +418,7 @@ export function PipelineWizard() {
           audience: audience || undefined,
           notes: notes || undefined,
           basePrompt: basePrompt || undefined,
+          brandKit: brandKit.trim() || undefined,
         },
         "Scripts failed",
         scriptsResponseSchema,
@@ -372,6 +436,7 @@ export function PipelineWizard() {
   }, [
     audience,
     basePrompt,
+    brandKit,
     loadReferenceImages,
     loadSavedScripts,
     notes,
@@ -683,6 +748,8 @@ export function PipelineWizard() {
           audience={audience}
           notes={notes}
           basePrompt={basePrompt}
+          brandKit={brandKit}
+          presets={presets}
           scriptEdit={scriptEdit}
           saveManualScript={saveManualScript}
           onScriptModeChange={setScriptMode}
@@ -691,6 +758,10 @@ export function PipelineWizard() {
           onAudienceChange={setAudience}
           onNotesChange={setNotes}
           onBasePromptChange={setBasePrompt}
+          onBrandKitChange={setBrandKit}
+          onApplyPreset={applyCreatorPreset}
+          onSavePreset={saveCreatorPresetFromForm}
+          onDeletePreset={deleteCreatorPresetById}
           onScriptEditChange={setScriptEdit}
           onSaveManualScriptChange={setSaveManualScript}
           onGenerateScripts={() => void generateScripts()}

@@ -46,7 +46,10 @@ export async function POST(req: Request) {
     // TODO: Add auth checks before allowing team users to generate or reuse scripts.
 
     const userLines = buildScriptUserMessage(input);
-    const systemMessage = buildScriptSystemMessage(input.basePrompt);
+    const systemMessage = buildScriptSystemMessage(
+      input.basePrompt,
+      input.brandKit,
+    );
 
     const completionRes = await fetch(
       `${env.ATLASCLOUD_BASE_URL}/v1/chat/completions`,

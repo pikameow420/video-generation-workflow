@@ -25,11 +25,19 @@ Output format (strict JSON only, no markdown):
   ]
 }`;
 
-export function buildScriptSystemMessage(basePrompt?: string): string {
+export function buildScriptSystemMessage(
+  basePrompt?: string,
+  brandKit?: string,
+): string {
+  const trimmedKit = brandKit?.trim();
+  const trimmedBase = basePrompt?.trim();
   return [
     ...SCRIPT_SYSTEM_RULES,
-    basePrompt
-      ? `\nCreator's Base Directives (Follow these strictly):\n${basePrompt}`
+    trimmedKit
+      ? `\nBrand voice & constraints (apply to every script option):\n${trimmedKit}`
+      : null,
+    trimmedBase
+      ? `\nCreator's Base Directives (Follow these strictly):\n${trimmedBase}`
       : null,
     `\n${SCRIPT_OUTPUT_FORMAT}`,
   ]

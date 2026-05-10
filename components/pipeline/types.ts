@@ -34,6 +34,8 @@ export type WizardSnapshot = {
   audience: string;
   notes: string;
   basePrompt: string;
+  /** Brand voice, words to avoid, sign-off style—injected into script generation. */
+  brandKit: string;
   scriptMode: ScriptMode;
   saveManualScript: boolean;
   manualScriptSource: "manual" | "uploaded";

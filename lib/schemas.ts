@@ -15,6 +15,8 @@ export const scriptsRequestSchema = z.object({
   audience: z.string().optional(),
   notes: z.string().optional(),
   basePrompt: z.string().optional(),
+  /** Voice, banned phrases, CTAs—merged into the script system prompt when set. */
+  brandKit: z.string().max(8000).optional(),
 });
 
 export const scriptOptionSchema = z.object({
