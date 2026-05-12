@@ -20,7 +20,7 @@ export function SheetStep({
   onRegenerate,
 }: SheetStepProps) {
   return (
-    <Card className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl border-zinc-200 bg-white py-0 shadow-sm duration-300 dark:border-zinc-800 dark:bg-zinc-950/50">
+    <Card className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl border-zinc-200 bg-white shadow-sm duration-300 dark:border-zinc-800 dark:bg-zinc-950/50">
       <CardHeader>
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
