@@ -51,6 +51,30 @@ const envSchema = z.object({
   ATLASCLOUD_VIDEO_FPS: z.coerce.number().int().positive().default(24),
   ATLASCLOUD_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(3000),
   ATLASCLOUD_POLL_MAX_MS: z.coerce.number().int().positive().default(900_000),
+  VIDEO_PROVIDER: z.enum(["atlas", "muapi"]).default("atlas"),
+  MUAPI_API_KEY: z.string().optional(),
+  MUAPI_BASE_URL: z.string().url().default("https://api.muapi.ai"),
+  /** Path segment under /api/v1 — see MuAPI OpenAPI. Default matches playground sd-2-omni-reference-no-video-fast. */
+  MUAPI_VIDEO_ENDPOINT: z
+    .string()
+    .default("seedance-2-omni-reference-no-video-fast"),
+  MUAPI_VIDEO_DURATION: z
+    .string()
+    .optional()
+    .transform((raw) => {
+      if (raw === undefined || raw.trim() === "") return 15;
+      const n = Number(raw.trim());
+      if (!Number.isFinite(n)) return 15;
+      const i = Math.round(n);
+      return Math.min(15, Math.max(4, i));
+    })
+    .pipe(z.number().int().min(4).max(15)),
+  /** VIP Omni endpoint also allows 21:9 and 1:1; default no-video-fast route allows only 16:9, 9:16, 4:3, 3:4. */
+  MUAPI_VIDEO_ASPECT_RATIO: z
+    .enum(["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"])
+    .default("9:16"),
+  MUAPI_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(3000),
+  MUAPI_POLL_MAX_MS: z.coerce.number().int().positive().default(900_000),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

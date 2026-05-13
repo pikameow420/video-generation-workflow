@@ -5,21 +5,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 
+import type { SubtitleLanguage } from "@/components/pipeline/types";
+
 type VideoStepProps = {
   busy: boolean;
   videoStatus: string;
   videoUrl: string | null;
   sheetUrl: string | null;
   subtitleSrt: string;
-  subtitleLanguage: "auto" | "en" | "hi" | "hinglish";
+  subtitleLanguage: SubtitleLanguage;
   subtitleChars: number | null;
+  /** Playback length detected from preview; Caption language uses this for timings. */
+  subtitleVideoDurationSec: number | null;
   captionedVideoUrl: string | null;
   videoMeta: { predictionId: string } | null;
   onStartVideo: () => void;
   onGoTopic: () => void;
   onGenerateSubtitles: () => void;
   onBurnSubtitles: () => void;
-  onSubtitleLanguageChange: (next: "auto" | "en" | "hi" | "hinglish") => void;
+  onSubtitleLanguageChange: (next: SubtitleLanguage) => void;
+  onSubtitleVideoDurationKnown: (seconds: number | null) => void;
   onSubtitleSrtChange: (next: string) => void;
 };
 
@@ -31,6 +36,7 @@ export function VideoStep({
   subtitleSrt,
   subtitleLanguage,
   subtitleChars,
+  subtitleVideoDurationSec,
   captionedVideoUrl,
   videoMeta,
   onStartVideo,
@@ -38,6 +44,7 @@ export function VideoStep({
   onGenerateSubtitles,
   onBurnSubtitles,
   onSubtitleLanguageChange,
+  onSubtitleVideoDurationKnown,
   onSubtitleSrtChange,
 }: VideoStepProps) {
   return (
@@ -65,54 +72,63 @@ export function VideoStep({
           </div>
         ) : null}
 
-        {videoUrl ? (
-          <div className="space-y-4">
-            <div className="overflow-hidden rounded-xl border border-zinc-200 bg-black dark:border-zinc-800">
-              <video
-                className="max-h-[600px] w-full object-contain"
-                src={videoUrl}
-                controls
-                playsInline
-                autoPlay
-              />
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <a
-                href={videoUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-              >
-                Download / Open Link ↗
-              </a>
-              <Button type="button" variant="outline" onClick={onGoTopic} className="rounded-full">
-                Start New Project
-              </Button>
+        {!busy && videoUrl ? (
+          <div className="space-y-5">
+            <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
+              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Preview
+              </p>
+              <div className="overflow-hidden rounded-lg border border-zinc-200 bg-black dark:border-zinc-800">
+                <video
+                  key={videoUrl}
+                  className="max-h-[600px] w-full object-contain"
+                  src={videoUrl}
+                  controls
+                  playsInline
+                  onLoadedMetadata={(event) => {
+                    const duration = event.currentTarget.duration;
+                    onSubtitleVideoDurationKnown(
+                      Number.isFinite(duration) ? duration : null,
+                    );
+                  }}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <a
+                  href={videoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Download Raw Video ↗
+                </a>
+                {videoMeta ? (
+                  <span className="text-xs text-zinc-500">
+                    Job {videoMeta.predictionId.slice(0, 8)}…
+                  </span>
+                ) : null}
+              </div>
             </div>
 
             <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                Post-Generation Subtitles
+                Subtitles
               </p>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex items-center gap-2 text-xs text-zinc-500">
-                  Caption language
-                  <select
-                    value={subtitleLanguage}
-                    onChange={(e) =>
-                      onSubtitleLanguageChange(
-                        e.target.value as "auto" | "en" | "hi" | "hinglish",
-                      )
-                    }
-                    disabled={busy}
-                    className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-                  >
-                    <option value="auto">Auto detect</option>
-                    <option value="en">English</option>
-                    <option value="hi">Hindi</option>
-                    <option value="hinglish">Hinglish (Roman Hindi)</option>
-                  </select>
-                </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                  value={subtitleLanguage}
+                  onChange={(e) =>
+                    onSubtitleLanguageChange(e.target.value as SubtitleLanguage)
+                  }
+                  disabled={busy}
+                >
+                  <option value="auto">Auto (transcribe)</option>
+                  <option value="en">English</option>
+                  <option value="hi">Hindi</option>
+                  <option value="hinglish">Hinglish</option>
+                  <option value="script">Script</option>
+                </select>
                 <Button
                   type="button"
                   variant="outline"
@@ -120,7 +136,7 @@ export function VideoStep({
                   disabled={busy}
                   className="rounded-full"
                 >
-                  {busy ? "Working..." : "Generate Subtitles"}
+                  Generate subtitles
                 </Button>
                 <Button
                   type="button"
@@ -128,13 +144,22 @@ export function VideoStep({
                   disabled={busy || !subtitleSrt.trim()}
                   className="rounded-full"
                 >
-                  {busy ? "Burning..." : "Create Instagram-ready Video"}
+                  Burn subtitles
                 </Button>
                 {subtitleChars !== null ? (
                   <span className="text-xs text-zinc-500">Subtitle chars: {subtitleChars}</span>
                 ) : null}
               </div>
-
+              {subtitleLanguage === "script" ? (
+                <p className="text-xs text-zinc-500">
+                  Uses the script you edited in step 2 (not speech-to-text). Cue timing stretches
+                  across the clip length detected from this preview{" "}
+                  {subtitleVideoDurationSec != null
+                    ? `(~${subtitleVideoDurationSec.toFixed(1)}s)`
+                    : "—wait for playback to initialise, or timings default to ~15s"}
+                  .
+                </p>
+              ) : null}
               <Textarea
                 className="min-h-[140px] text-xs leading-relaxed"
                 placeholder="Generated subtitles (SRT) will appear here..."
@@ -150,6 +175,7 @@ export function VideoStep({
                 </p>
                 <div className="overflow-hidden rounded-lg border border-zinc-200 bg-black dark:border-zinc-800">
                   <video
+                    key={captionedVideoUrl}
                     className="max-h-[600px] w-full object-contain"
                     src={captionedVideoUrl}
                     controls
@@ -175,12 +201,6 @@ export function VideoStep({
               {sheetUrl ? "Retry Video Generation" : "Start Over"}
             </Button>
           </div>
-        ) : null}
-
-        {videoMeta && !busy ? (
-          <p className="mt-4 border-t border-zinc-100 pt-4 text-xs text-zinc-500 dark:border-zinc-800">
-            Job ID: {videoMeta.predictionId}
-          </p>
         ) : null}
       </CardContent>
     </Card>

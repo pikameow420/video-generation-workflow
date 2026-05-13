@@ -13,6 +13,7 @@ Before editing Next.js code, check relevant docs in `node_modules/next/dist/docs
 - Environment config is parsed in `lib/env.ts`.
 - Request/response validation lives in `lib/schemas.ts`.
 - Atlas/Seedance helpers live in `lib/seedance/client.ts`.
+- MuAPI video helpers live in `lib/muapi/client.ts`.
 
 ## Development
 

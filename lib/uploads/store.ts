@@ -1,7 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { put } from "@vercel/blob";
+import { BlobNotFoundError, del, put } from "@vercel/blob";
 import { getEnv } from "@/lib/env";
 
 export type ReferenceImageRecord = {
@@ -55,7 +55,14 @@ async function appendToIndex(record: ReferenceImageRecord): Promise<void> {
   await mkdir(path.dirname(indexPath), { recursive: true });
   const current = await readIndex(indexPath);
   current.unshift(record);
-  await writeFile(indexPath, JSON.stringify(current, null, 2), "utf8");
+  await writeFullIndexRecords(current);
+}
+
+async function writeFullIndexRecords(records: ReferenceImageRecord[]): Promise<void> {
+  const env = getEnv();
+  const indexPath = path.resolve(process.cwd(), env.REFERENCE_IMAGE_INDEX_PATH);
+  await mkdir(path.dirname(indexPath), { recursive: true });
+  await writeFile(indexPath, JSON.stringify(records, null, 2), "utf8");
 }
 
 async function putLocalReferenceImage(
@@ -127,4 +134,61 @@ export async function listReferenceImages(): Promise<ReferenceImageRecord[]> {
   const indexPath = path.resolve(process.cwd(), env.REFERENCE_IMAGE_INDEX_PATH);
   const records = await readIndex(indexPath);
   return records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function localFileNameFromRecordUrl(recordUrl: string): string {
+  const trimmed = recordUrl.trim();
+  try {
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      return path.basename(new URL(trimmed).pathname);
+    }
+  } catch {
+    /* fall through */
+  }
+  return path.basename(trimmed.split("?")[0] ?? trimmed);
+}
+
+export class ReferenceImageNotFoundError extends Error {
+  readonly id: string;
+
+  constructor(id: string) {
+    super(`Reference image not found: ${id}`);
+    this.name = "ReferenceImageNotFoundError";
+    this.id = id;
+  }
+}
+
+export async function deleteReferenceImage(id: string): Promise<void> {
+  const env = getEnv();
+  const indexPath = path.resolve(process.cwd(), env.REFERENCE_IMAGE_INDEX_PATH);
+  const current = await readIndex(indexPath);
+  const record = current.find((r) => r.id === id);
+  if (!record) {
+    throw new ReferenceImageNotFoundError(id);
+  }
+
+  if (env.UPLOAD_BACKEND === "blob") {
+    const token = env.BLOB_READ_WRITE_TOKEN?.trim();
+    if (!token) {
+      throw new Error(
+        "BLOB_READ_WRITE_TOKEN is required to delete blob reference images",
+      );
+    }
+    try {
+      await del(record.url, { token });
+    } catch (err) {
+      if (!(err instanceof BlobNotFoundError)) throw err;
+    }
+  } else {
+    const fileName = localFileNameFromRecordUrl(record.url);
+    const absolutePath = path.resolve(process.cwd(), env.LOCAL_UPLOAD_DIR, fileName);
+    try {
+      await unlink(absolutePath);
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException;
+      if (error.code !== "ENOENT") throw err;
+    }
+  }
+
+  await writeFullIndexRecords(current.filter((r) => r.id !== id));
 }

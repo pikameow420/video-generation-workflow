@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useApiAction } from "@/hooks/useApiAction";
 import { useWizardLocalStorage } from "@/hooks/useWizardLocalStorage";
-import { getJson, postForm, postJson } from "@/lib/api/client";
+import { getJson, deleteJson, postForm, postJson } from "@/lib/api/client";
 import {
   addCreatorPreset,
   loadCreatorPresets,
@@ -38,7 +38,9 @@ import {
   savedScriptSchema,
   scriptsResponseSchema,
   transcribeSubtitlesResponseSchema,
+  videoConfigResponseSchema,
   videoResponseSchema,
+  type VideoProvider,
 } from "@/lib/schemas";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
@@ -46,6 +48,13 @@ import { toast } from "sonner";
 const MAX_MANUAL_SCRIPT_FILE_BYTES = 256 * 1024;
 const WIZARD_STORAGE_KEY = "video-pipeline-wizard-state-v1";
 const MAX_REFERENCE_IMAGES = 9;
+const VIDEO_PROVIDER_STORAGE_KEY = "pipeline-video-provider";
+
+function readStoredVideoProvider(): VideoProvider | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(VIDEO_PROVIDER_STORAGE_KEY);
+  return raw === "atlas" || raw === "muapi" ? raw : null;
+}
 
 function normalizeReferenceUrl(url: string): string {
   return url.trim();
@@ -110,11 +119,85 @@ export function PipelineWizard() {
     useState<SubtitleLanguage>("auto");
   const [subtitleSrt, setSubtitleSrt] = useState("");
   const [subtitleChars, setSubtitleChars] = useState<number | null>(null);
+  const [subtitleVideoDurationSec, setSubtitleVideoDurationSec] = useState<
+    number | null
+  >(null);
   const [captionedVideoUrl, setCaptionedVideoUrl] = useState<string | null>(
     null,
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [videoProvider, setVideoProvider] = useState<VideoProvider>("atlas");
+  const [videoProviderEnv, setVideoProviderEnv] = useState<{
+    loaded: boolean;
+    atlasConfigured: boolean;
+    muapiConfigured: boolean;
+  }>({
+    loaded: false,
+    atlasConfigured: false,
+    muapiConfigured: false,
+  });
+
+  const videoBackendReady = useMemo(() => {
+    if (!videoProviderEnv.loaded) return false;
+    return (
+      (videoProvider === "atlas" && videoProviderEnv.atlasConfigured) ||
+      (videoProvider === "muapi" && videoProviderEnv.muapiConfigured)
+    );
+  }, [videoProvider, videoProviderEnv]);
+
+  const persistVideoProvider = useCallback((next: VideoProvider) => {
+    setVideoProvider(next);
+    try {
+      localStorage.setItem(VIDEO_PROVIDER_STORAGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const cfg = await getJson(
+          "/api/video/config",
+          "Video provider config failed",
+          videoConfigResponseSchema,
+        );
+        if (cancelled) return;
+
+        const stored = readStoredVideoProvider();
+        let next: VideoProvider = stored ?? cfg.defaultProvider;
+
+        if (next === "atlas" && !cfg.atlasConfigured && cfg.muapiConfigured) {
+          next = "muapi";
+        }
+        if (next === "muapi" && !cfg.muapiConfigured && cfg.atlasConfigured) {
+          next = "atlas";
+        }
+
+        setVideoProvider(next);
+        try {
+          localStorage.setItem(VIDEO_PROVIDER_STORAGE_KEY, next);
+        } catch {
+          /* ignore */
+        }
+        setVideoProviderEnv({
+          loaded: true,
+          atlasConfigured: cfg.atlasConfigured,
+          muapiConfigured: cfg.muapiConfigured,
+        });
+      } catch {
+        if (!cancelled) {
+          setVideoProviderEnv((prev) => ({ ...prev, loaded: true }));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const runApiAction = useApiAction({
     onError: (message) => {
@@ -156,6 +239,7 @@ export function PipelineWizard() {
       videoMeta,
       videoStatus,
       subtitleLanguage,
+      subtitleVideoDurationSec,
       subtitleSrt,
       subtitleChars,
       captionedVideoUrl,
@@ -184,6 +268,7 @@ export function PipelineWizard() {
       videoMeta,
       videoStatus,
       subtitleLanguage,
+      subtitleVideoDurationSec,
       subtitleSrt,
       subtitleChars,
       captionedVideoUrl,
@@ -225,6 +310,9 @@ export function PipelineWizard() {
     if (loaded.videoStatus !== undefined) setVideoStatus(loaded.videoStatus);
     if (loaded.subtitleLanguage !== undefined) {
       setSubtitleLanguage(loaded.subtitleLanguage);
+    }
+    if (loaded.subtitleVideoDurationSec !== undefined) {
+      setSubtitleVideoDurationSec(loaded.subtitleVideoDurationSec);
     }
     if (loaded.subtitleSrt !== undefined) setSubtitleSrt(loaded.subtitleSrt);
     if (loaded.subtitleChars !== undefined) setSubtitleChars(loaded.subtitleChars);
@@ -314,7 +402,7 @@ export function PipelineWizard() {
       setLoadingSavedScripts(true);
       const data = await getJson(
         "/api/scripts/library",
-        "Could not load saved scripts",
+        "Failed to load saved scripts",
         savedScriptListResponseSchema,
       );
       setSavedScripts(data.items ?? []);
@@ -611,6 +699,7 @@ export function PipelineWizard() {
       setSubtitleSrt("");
       setSubtitleChars(null);
       setCaptionedVideoUrl(null);
+      setSubtitleVideoDurationSec(null);
       setVideoStatus("Starting video job...");
       setStep("video");
       const data = await postJson(
@@ -622,6 +711,7 @@ export function PipelineWizard() {
           referenceImageUrls: selectedReferenceUrls.length
             ? selectedReferenceUrls
             : undefined,
+          provider: videoProvider,
         },
         "Video failed",
         videoResponseSchema,
@@ -631,7 +721,13 @@ export function PipelineWizard() {
       setVideoStatus("Done.");
       toast.success("Video generated.");
     }, "Request failed");
-  }, [runApiAction, scriptEdit, selectedReferenceUrls, sheetUrl]);
+  }, [
+    runApiAction,
+    scriptEdit,
+    selectedReferenceUrls,
+    sheetUrl,
+    videoProvider,
+  ]);
 
   const onUploadReference = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
@@ -670,6 +766,30 @@ export function PipelineWizard() {
     });
   }, []);
 
+  const deleteReferenceFromLibrary = useCallback(
+    async (item: ReferenceImage) => {
+      await runApiAction(async () => {
+        await deleteJson(
+          `/api/reference-images?id=${encodeURIComponent(item.id)}`,
+          "Failed to delete reference image",
+        );
+        setSelectedReferenceUrls((prev) =>
+          prev.filter(
+            (url) => normalizeReferenceUrl(url) !== normalizeReferenceUrl(item.url),
+          ),
+        );
+        setSheetUrl((prev) =>
+          prev && normalizeReferenceUrl(prev) === normalizeReferenceUrl(item.url)
+            ? null
+            : prev,
+        );
+        await loadReferenceImages();
+        toast.success("Reference removed from library.");
+      }, "Delete failed");
+    },
+    [loadReferenceImages, runApiAction],
+  );
+
   const useSelectedReferenceDirectly = useCallback(() => {
     const first = selectedReferenceUrls[0];
     if (!first) return;
@@ -680,16 +800,35 @@ export function PipelineWizard() {
     setCaptionedVideoUrl(null);
     setSubtitleSrt("");
     setSubtitleChars(null);
+    setSubtitleVideoDurationSec(null);
     setStep("sheet");
   }, [selectedReferenceUrls]);
 
   const generateSubtitles = useCallback(async () => {
     if (!videoUrl) return;
+    if (subtitleLanguage === "script" && !scriptEdit.body.trim()) {
+      toast.error("There is no script body to use for captions. Go back and pick or enter a script.");
+      return;
+    }
     toast.info("Generating subtitles...");
     await runApiAction(async () => {
+      const payload: Record<string, unknown> = {
+        videoUrl,
+        language: subtitleLanguage,
+      };
+      if (subtitleLanguage === "script") {
+        payload.scriptBody = scriptEdit.body.trim();
+        if (
+          subtitleVideoDurationSec != null &&
+          Number.isFinite(subtitleVideoDurationSec) &&
+          subtitleVideoDurationSec > 0
+        ) {
+          payload.videoDurationSec = subtitleVideoDurationSec;
+        }
+      }
       const data = await postJson(
         "/api/subtitles/transcribe",
-        { videoUrl, language: subtitleLanguage },
+        payload,
         "Subtitle generation failed",
         transcribeSubtitlesResponseSchema,
       );
@@ -699,7 +838,13 @@ export function PipelineWizard() {
       setCaptionedVideoUrl(null);
       toast.success("Subtitles generated.");
     }, "Subtitle generation failed");
-  }, [runApiAction, subtitleLanguage, videoUrl]);
+  }, [
+    runApiAction,
+    scriptEdit.body,
+    subtitleLanguage,
+    subtitleVideoDurationSec,
+    videoUrl,
+  ]);
 
   const burnSubtitles = useCallback(async () => {
     if (!videoUrl || !subtitleSrt.trim()) return;
@@ -721,7 +866,8 @@ export function PipelineWizard() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-10 sm:px-6 lg:pr-[380px]">
       <header className="mb-2 space-y-2">
         <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-          Script - Character Sheet - Seedance (Atlas Cloud)
+          Script · Character Sheet · Seedance (
+          {videoProvider === "muapi" ? "MuAPI" : "Atlas Cloud"})
         </p>
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
           Video Pipeline
@@ -799,6 +945,7 @@ export function PipelineWizard() {
           onRefreshReferences={() => void loadReferenceImages()}
           onSelectReferenceImage={selectReferenceImage}
           onRemoveReferenceImage={selectReferenceImage}
+          onDeleteReferenceImage={(item) => void deleteReferenceFromLibrary(item)}
           onUseSelectedReferenceDirectly={useSelectedReferenceDirectly}
           onGenerateSheet={() => void generateSheet()}
         />
@@ -815,6 +962,12 @@ export function PipelineWizard() {
           busy={busy}
           sheetUrl={sheetUrl}
           sheetSource={sheetSource}
+          videoProvider={videoProvider}
+          onVideoProviderChange={persistVideoProvider}
+          videoProviderEnvLoaded={videoProviderEnv.loaded}
+          atlasConfigured={videoProviderEnv.atlasConfigured}
+          muapiConfigured={videoProviderEnv.muapiConfigured}
+          canStartVideo={videoBackendReady}
           onStartVideo={() => void startVideo()}
           onRegenerate={() =>
             sheetSource === "uploaded" ? setStep("scripts") : void generateSheet()
@@ -838,6 +991,7 @@ export function PipelineWizard() {
           subtitleSrt={subtitleSrt}
           subtitleLanguage={subtitleLanguage}
           subtitleChars={subtitleChars}
+          subtitleVideoDurationSec={subtitleVideoDurationSec}
           captionedVideoUrl={captionedVideoUrl}
           videoMeta={videoMeta}
           onStartVideo={() => void startVideo()}
@@ -845,6 +999,7 @@ export function PipelineWizard() {
           onGenerateSubtitles={() => void generateSubtitles()}
           onBurnSubtitles={() => void burnSubtitles()}
           onSubtitleLanguageChange={setSubtitleLanguage}
+          onSubtitleVideoDurationKnown={setSubtitleVideoDurationSec}
           onSubtitleSrtChange={setSubtitleSrt}
         />
       ) : null}

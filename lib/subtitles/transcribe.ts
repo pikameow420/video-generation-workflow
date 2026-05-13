@@ -29,7 +29,7 @@ function splitWordsIntoChunks(words: string[], chunkCount: number): string[] {
   return chunks;
 }
 
-function splitCueForPacing(
+export function splitCueForPacing(
   cue: SubtitleCue,
   maxCharsPerLine: number,
   maxSecondsPerCue: number,

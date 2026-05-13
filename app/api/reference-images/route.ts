@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import {
   allowedReferenceImageMimeTypes,
   maxReferenceImageBytes,
   referenceImageListResponseSchema,
 } from "@/lib/schemas";
-import { listReferenceImages, putReferenceImage } from "@/lib/uploads/store";
+import {
+  deleteReferenceImage,
+  listReferenceImages,
+  putReferenceImage,
+  ReferenceImageNotFoundError,
+} from "@/lib/uploads/store";
+
+const deleteQuerySchema = z.object({
+  id: z.uuid(),
+});
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,6 +37,32 @@ export async function GET() {
   } catch (err) {
     return NextResponse.json(
       { error: parseErrorMessage(err, "Failed to list reference images") },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const parsed = deleteQuerySchema.safeParse({
+      id: url.searchParams.get("id"),
+    });
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues.map((issue) => issue.message).join("; ") },
+        { status: 400 },
+      );
+    }
+
+    await deleteReferenceImage(parsed.data.id);
+    return new NextResponse(null, { status: 204 });
+  } catch (err) {
+    if (err instanceof ReferenceImageNotFoundError) {
+      return NextResponse.json({ error: err.message }, { status: 404 });
+    }
+    return NextResponse.json(
+      { error: parseErrorMessage(err, "Failed to delete reference image") },
       { status: 500 },
     );
   }

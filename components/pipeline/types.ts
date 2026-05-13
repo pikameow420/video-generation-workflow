@@ -24,7 +24,7 @@ export type ReferenceImage = {
 
 export type Step = "topic" | "scripts" | "sheet" | "video";
 export type ScriptMode = "generate" | "manual";
-export type SubtitleLanguage = "auto" | "en" | "hi" | "hinglish";
+export type SubtitleLanguage = "auto" | "en" | "hi" | "hinglish" | "script";
 
 export type WizardSnapshot = {
   isScriptSidebarOpen: boolean;
@@ -51,6 +51,8 @@ export type WizardSnapshot = {
   videoMeta: { predictionId: string } | null;
   videoStatus: string;
   subtitleLanguage: SubtitleLanguage;
+  /** Playback length from preview video metadata; used when caption language is Script. */
+  subtitleVideoDurationSec: number | null;
   subtitleSrt: string;
   subtitleChars: number | null;
   captionedVideoUrl: string | null;

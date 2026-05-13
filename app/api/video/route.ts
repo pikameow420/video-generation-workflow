@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { videoRequestSchema } from "@/lib/schemas";
+import { videoRequestSchema, type VideoProvider } from "@/lib/schemas";
 import { getEnv } from "@/lib/env";
+import { uploadMuapiFile, waitForMuapiVideoFromScriptAndImageUrls } from "@/lib/muapi/client";
 import {
   createAtlasAssetFromUrl,
   uploadMediaFile,
@@ -54,7 +55,7 @@ function extensionFromMime(mime: string): string {
   return "bin";
 }
 
-function shouldUploadRemoteForAtlas(url: URL): boolean {
+function shouldRehostRemoteImage(url: URL): boolean {
   return (
     url.protocol === "http:" ||
     url.hostname === "localhost" ||
@@ -64,16 +65,11 @@ function shouldUploadRemoteForAtlas(url: URL): boolean {
   );
 }
 
-async function uploadRemoteImageToAtlas(
+async function uploadRemoteImageForProvider(
   sourceUrl: string,
   env: ReturnType<typeof getEnv>,
+  provider: VideoProvider,
 ): Promise<string> {
-  const apiKey = env.ATLASCLOUD_API_KEY;
-  if (!apiKey?.trim()) {
-    throw new Error(
-      "ATLASCLOUD_API_KEY is required to upload reference images for video generation",
-    );
-  }
   const sourceRes = await fetch(sourceUrl);
   if (!sourceRes.ok) {
     throw new Error(`Failed to download reference image (${sourceRes.status})`);
@@ -81,19 +77,44 @@ async function uploadRemoteImageToAtlas(
   const contentType = sourceRes.headers.get("content-type") ?? "image/png";
   const ext = extensionFromMime(contentType);
   const bytes = Buffer.from(await sourceRes.arrayBuffer());
-  const { downloadUrl } = await uploadMediaFile({
+
+  if (provider === "atlas") {
+    const apiKey = env.ATLASCLOUD_API_KEY?.trim();
+    if (!apiKey) {
+      throw new Error(
+        "ATLASCLOUD_API_KEY is required to upload reference images for video generation",
+      );
+    }
+    const { downloadUrl } = await uploadMediaFile({
+      buffer: bytes,
+      filename: `reference.${ext}`,
+      contentType,
+      apiKey,
+      baseUrl: env.ATLASCLOUD_BASE_URL,
+    });
+    return downloadUrl;
+  }
+
+  const apiKey = env.MUAPI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error(
+      "MUAPI_API_KEY is required to upload reference images for video generation",
+    );
+  }
+  const { url } = await uploadMuapiFile({
+    apiKey,
+    baseUrl: env.MUAPI_BASE_URL,
     buffer: bytes,
     filename: `reference.${ext}`,
     contentType,
-    apiKey,
-    baseUrl: env.ATLASCLOUD_BASE_URL,
   });
-  return downloadUrl;
+  return url;
 }
 
 async function resolveImageUrl(
   raw: string,
   req: Request,
+  provider: VideoProvider,
 ): Promise<string | undefined> {
   const env = getEnv();
   const ref = parseImageRef(raw);
@@ -106,31 +127,48 @@ async function resolveImageUrl(
 
   let imageUrl = ref.remoteUrl;
   if (ref.buffer && ref.mime && ref.filename) {
-    const apiKey = env.ATLASCLOUD_API_KEY;
-    if (!apiKey?.trim()) {
-      throw new Error(
-        "ATLASCLOUD_API_KEY is required to upload reference images for video generation",
-      );
+    if (provider === "atlas") {
+      const apiKey = env.ATLASCLOUD_API_KEY?.trim();
+      if (!apiKey) {
+        throw new Error(
+          "ATLASCLOUD_API_KEY is required to upload reference images for video generation",
+        );
+      }
+      const { downloadUrl } = await uploadMediaFile({
+        buffer: ref.buffer,
+        filename: ref.filename,
+        contentType: ref.mime,
+        apiKey,
+        baseUrl: env.ATLASCLOUD_BASE_URL,
+      });
+      imageUrl = downloadUrl;
+    } else {
+      const apiKey = env.MUAPI_API_KEY?.trim();
+      if (!apiKey) {
+        throw new Error(
+          "MUAPI_API_KEY is required to upload reference images for video generation",
+        );
+      }
+      const { url } = await uploadMuapiFile({
+        apiKey,
+        baseUrl: env.MUAPI_BASE_URL,
+        buffer: ref.buffer,
+        filename: ref.filename,
+        contentType: ref.mime,
+      });
+      imageUrl = url;
     }
-    const { downloadUrl } = await uploadMediaFile({
-      buffer: ref.buffer,
-      filename: ref.filename,
-      contentType: ref.mime,
-      apiKey,
-      baseUrl: env.ATLASCLOUD_BASE_URL,
-    });
-    imageUrl = downloadUrl;
   }
   if (imageUrl) {
     const url = new URL(imageUrl);
-    if (shouldUploadRemoteForAtlas(url)) {
-      imageUrl = await uploadRemoteImageToAtlas(imageUrl, env);
+    if (shouldRehostRemoteImage(url)) {
+      imageUrl = await uploadRemoteImageForProvider(imageUrl.toString(), env, provider);
     }
   }
   return imageUrl;
 }
 
-function normalizeAtlasVideoError(err: unknown): string {
+function normalizeVideoError(err: unknown): string {
   const fallback = err instanceof Error ? err.message : "Failed to generate video";
   const lower = fallback.toLowerCase();
   if (
@@ -141,6 +179,26 @@ function normalizeAtlasVideoError(err: unknown): string {
     return "Atlas blocked this request because a reference image may contain a real person. Use Atlas library-audited assets (asset://...) for real-person references, or switch to non-real-person references.";
   }
   return fallback;
+}
+
+function httpStatusForVideoError(message: string): number {
+  const lower = message.toLowerCase();
+  if (lower.includes("timed out waiting for muapi")) return 504;
+
+  const likelyClient =
+    lower.includes("could not resolve image url") ||
+    lower.includes("must be a data:image") ||
+    lower.includes("muapi_api_key is required") ||
+    lower.includes("atlascloud_api_key is required") ||
+    lower.includes("insufficient credits") ||
+    lower.includes("rate limited") ||
+    lower.includes("upload_file failed") ||
+    lower.includes("uploadmedia failed") ||
+    lower.includes("muapi upload_file") ||
+    lower.includes("atlas blocked") ||
+    lower.includes("real person");
+
+  return likelyClient ? 400 : 500;
 }
 
 function isRealPersonPolicyError(err: unknown): boolean {
@@ -200,12 +258,33 @@ export async function POST(req: Request) {
   try {
     const json = await req.json();
     const body = videoRequestSchema.parse(json);
+    const env = getEnv();
+    const provider = body.provider ?? env.VIDEO_PROVIDER;
+
+    if (provider === "atlas" && !env.ATLASCLOUD_API_KEY?.trim()) {
+      return NextResponse.json(
+        {
+          error:
+            "Atlas Cloud video generation requires ATLASCLOUD_API_KEY on the server.",
+        },
+        { status: 400 },
+      );
+    }
+    if (provider === "muapi" && !env.MUAPI_API_KEY?.trim()) {
+      return NextResponse.json(
+        {
+          error: "MuAPI video generation requires MUAPI_API_KEY on the server.",
+        },
+        { status: 400 },
+      );
+    }
+
     const candidates = [
       body.imageDataUrlOrUrl,
       ...(body.referenceImageUrls ?? []),
     ].filter(Boolean);
     const resolved = await Promise.all(
-      candidates.map((candidate) => resolveImageUrl(candidate, req)),
+      candidates.map((candidate) => resolveImageUrl(candidate, req, provider)),
     );
     const imageUrls = Array.from(new Set(resolved.filter(Boolean))) as string[];
 
@@ -213,7 +292,25 @@ export async function POST(req: Request) {
       throw new Error("Could not resolve image URL for video generation");
     }
 
-    const env = getEnv();
+    if (provider === "muapi") {
+      if (imageUrls.some((u) => u.startsWith("asset://"))) {
+        return NextResponse.json(
+          {
+            error:
+              "MuAPI needs public HTTPS image URLs. Atlas-only asset:// references cannot be used. Choose Atlas as the video provider, or use hosted references instead.",
+          },
+          { status: 400 },
+        );
+      }
+
+      const result = await waitForMuapiVideoFromScriptAndImageUrls({
+        scriptTitle: body.scriptTitle,
+        scriptBody: body.scriptBody,
+        imageUrls,
+      });
+      return NextResponse.json(result);
+    }
+
     const preparedImageRefs =
       canAutoAssetize(env) && imageUrls.some((url) => !url.startsWith("asset://"))
         ? await assetizeImageUrls(imageUrls)
@@ -246,7 +343,8 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    const message = normalizeAtlasVideoError(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const message = normalizeVideoError(err);
+    const status = httpStatusForVideoError(message);
+    return NextResponse.json({ error: message }, { status });
   }
 }

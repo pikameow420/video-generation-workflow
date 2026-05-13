@@ -14,8 +14,8 @@ The UI is a **four-step wizard**: topic & scripts → pick or edit a script & re
 | **Scripts**         | Generate **four** options via Deepseek, paste/upload your own, or pull from a **saved script library** (stored on disk / JSON index).                   |
 | **Voice & brand**   | **Base prompt**, **brand kit**, and **named presets** (topic, tone, audience, notes, art direction, etc.)—presets live in the browser’s `localStorage`. |
 | **Look**            | Generate a **3×3 character sheet** from the script (OpenAI image 2), optionally steer with **reference images** from your library.                      |
-| **Video**           | **Seedance** (Atlas Cloud & soon muAPI) reference-to-video using the sheet; poll until the clip is ready.                                               |
-| **Captions**        | Transcribe with **OpenAI**, tweak SRT, **burn subtitles** with **ffmpeg**—English, Hindi, or Hinglish-friendly flow.                                    |
+| **Video**           | **Seedance** reference-to-video via **Atlas Cloud** or **MuAPI** (Omni Reference No Video Fast default); async poll until the clip is ready.              |
+| **Captions**        | OpenAI Whisper **transcription** or **exact script text** timed to clip length; tweak SRT and **burn** with **ffmpeg** (English, Hindi, Hinglish, or your written script).                                              |
 | **Session restore** | Wizard state is **autosaved** in `localStorage` so a refresh doesn’t wipe your in-progress pipeline.                                                    |
 
 
@@ -33,7 +33,8 @@ The UI is a **four-step wizard**: topic & scripts → pick or edit a script & re
 ## Stack
 
 - **Next.js 16** (App Router), **React 19**, **TypeScript**, **Tailwind**, **shadcn-style UI**, **Zod** for API validation  
-- **Atlas Cloud** — chat for scripts, Seedance for video  
+- **Atlas Cloud** — chat for scripts; optional Seedance reference-to-video  
+- **MuAPI** — optional Seedance Omni Reference No Video Fast (`images_list` + `@image1`… slots in prompt); [playground](https://muapi.ai/playground/sd-2-omni-reference-no-video-fast); see [MuAPI SD 2](https://muapi.ai/sd-2)  
 - **OpenAI** — character sheet images + transcription (when configured)  
 - **ffmpeg** — caption burn-in (must be available on the machine running the burn route)
 
@@ -52,6 +53,7 @@ The UI is a **four-step wizard**: topic & scripts → pick or edit a script & re
 | Env & defaults                   | `lib/env.ts`                             |
 | Request/response schemas         | `lib/schemas.ts`                         |
 | Seedance / Atlas helpers         | `lib/seedance/client.ts`                 |
+| MuAPI video helpers             | `lib/muapi/client.ts`                    |
 | Creator presets (client storage) | `lib/pipeline/creator-presets.ts`        |
 
 
@@ -61,11 +63,14 @@ The UI is a **four-step wizard**: topic & scripts → pick or edit a script & re
 
 Copy env vars your deployment needs (see `**lib/env.ts`** for the full list and defaults). Minimally, for the full happy path:
 
-- `**ATLASCLOUD_API_KEY**` — scripts + video (required for those features)
+- `**ATLASCLOUD_API_KEY**` — scripts + Atlas video path (required for those features)  
+- `**MUAPI_API_KEY**` — MuAPI video path only ([authentication](https://muapi.ai/docs/authentication))  
+- `**VIDEO_PROVIDER**` — default backend when the UI does not override: `atlas` or `muapi` (`lib/env.ts`)  
+- `**MUAPI_BASE_URL**`, `**MUAPI_VIDEO_ENDPOINT**`, `**MUAPI_VIDEO_DURATION**` (4–15), `**MUAPI_VIDEO_ASPECT_RATIO**`, poll tuning — see `lib/env.ts`
 - `**OPENAI_API_KEY**` — character sheet + transcription (optional but needed for those steps)
 - `**UPLOAD_BACKEND**` — `local` (default) or `blob` for Vercel Blob reference uploads
 
-**Reference images (local mode):** files under `public/uploads/reference-images`, index path configurable via `REFERENCE_IMAGE_INDEX_PATH`.
+**Reference images (local mode):** files under `public/uploads/reference-images`, index path configurable via `REFERENCE_IMAGE_INDEX_PATH`. On the Scripts step, hover a thumbnail and use the **X** to remove that image from the library (and index); **blob mode** needs `BLOB_READ_WRITE_TOKEN` for uploads and deletes.
 
 **Captioned videos (local mode):** `LOCAL_CAPTIONED_VIDEO_DIR`, `CAPTIONED_VIDEO_BASE_PATH`, `CAPTIONED_VIDEO_INDEX_PATH`.
 

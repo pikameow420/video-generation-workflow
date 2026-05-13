@@ -87,3 +87,14 @@ export async function postForm<T>(
   }
   return parseWithSchema(parsed, schema, fallbackError);
 }
+
+export async function deleteJson(
+  url: string,
+  fallbackError: string,
+): Promise<void> {
+  const res = await fetch(url, { method: "DELETE" });
+  const parsed = await readJson<ApiErrorShape>(res);
+  if (!res.ok) {
+    throw new Error(resolveErrorMessage(parsed, fallbackError));
+  }
+}

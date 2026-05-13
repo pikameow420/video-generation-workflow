@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import type { ScriptMode } from "@/components/pipeline/types";
+import { ChevronDown } from "lucide-react";
 
 type TopicStepProps = {
   scriptMode: ScriptMode;
@@ -42,6 +43,59 @@ type TopicStepProps = {
   onManualBodyInput: () => void;
 };
 
+
+function TopicBasePromptCollapsible(props: {
+  basePrompt: string;
+  onBasePromptChange: (v: string) => void;
+}) {
+  const { basePrompt, onBasePromptChange } = props;
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-2 bg-zinc-50/80 px-4 py-3 text-left transition-colors hover:bg-zinc-100/90 dark:bg-zinc-900/30 dark:hover:bg-zinc-900/55"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            Base Prompt
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Persistent instructions (merged when generating scripts)
+          </p>
+          {!expanded && basePrompt.trim() ? (
+            <p className="mt-1 truncate text-xs italic text-zinc-500 dark:text-zinc-400">
+              {basePrompt.trim().slice(0, 120)}
+              {basePrompt.trim().length > 120 ? "…" : ""}
+            </p>
+          ) : null}
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 dark:text-zinc-400 ${expanded ? "rotate-0" : "-rotate-90"}`}
+          aria-hidden
+        />
+      </button>
+      {expanded ? (
+        <div className="space-y-1.5 border-t border-zinc-200 p-4 dark:border-zinc-800">
+          <Label htmlFor="base-prompt-input" className="sr-only">
+            Base Prompt (Persistent instructions)
+          </Label>
+          <Textarea
+            id="base-prompt-input"
+            className="min-h-[88px]"
+            value={basePrompt}
+            onChange={(e) => onBasePromptChange(e.target.value)}
+            placeholder="e.g. Always be concise, use Gen Z slang, keep it funny"
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function TopicStep({
   scriptMode,
   busy,
@@ -72,10 +126,6 @@ export function TopicStep({
   onLoadSavedScripts,
   onManualBodyInput,
 }: TopicStepProps) {
-  const [presetPickerKey, setPresetPickerKey] = useState(0);
-  const [presetNameDraft, setPresetNameDraft] = useState("");
-  const [presetToDeleteId, setPresetToDeleteId] = useState("");
-
   return (
     <Card className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl border-zinc-200 bg-white shadow-sm duration-300 dark:border-zinc-800 dark:bg-zinc-950/50">
       <CardHeader>
@@ -111,97 +161,13 @@ export function TopicStep({
 
         {scriptMode === "generate" ? (
           <>
-            <div className="space-y-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 p-4 dark:border-zinc-700 dark:bg-zinc-900/40">
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
-                Presets
-              </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Save or load topic, tone, audience, notes, brand kit, base prompt, and
-                art direction for the next steps.
-              </p>
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Load preset
-                  </label>
-                  <select
-                    key={presetPickerKey}
-                    className="h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                    defaultValue=""
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      if (!id) return;
-                      const p = presets.find((x) => x.id === id);
-                      if (p) onApplyPreset(p);
-                      setPresetPickerKey((k) => k + 1);
-                    }}
-                  >
-                    <option value="">Choose saved preset…</option>
-                    {presets.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex min-w-0 flex-[2] flex-col gap-2 sm:flex-row sm:items-end">
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                      Save as
-                    </label>
-                    <Input
-                      className="h-9"
-                      value={presetNameDraft}
-                      onChange={(e) => setPresetNameDraft(e.target.value)}
-                      placeholder="e.g. Coffee explainers"
-                      maxLength={80}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-9 shrink-0 rounded-full"
-                    disabled={busy}
-                    onClick={() => {
-                      onSavePreset(presetNameDraft);
-                    }}
-                  >
-                    Save preset
-                  </Button>
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-end">
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                      Remove preset
-                    </label>
-                    <select
-                      className="h-9 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                      value={presetToDeleteId}
-                      onChange={(e) => setPresetToDeleteId(e.target.value)}
-                    >
-                      <option value="">Select…</option>
-                      {presets.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-9 shrink-0 rounded-full text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                    disabled={busy || !presetToDeleteId}
-                    onClick={() => {
-                      onDeletePreset(presetToDeleteId);
-                      setPresetToDeleteId("");
-                    }}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            </div>
+            {/* <TopicPresetsCollapsible
+              busy={busy}
+              presets={presets}
+              onApplyPreset={onApplyPreset}
+              onSavePreset={onSavePreset}
+              onDeletePreset={onDeletePreset}
+            /> */}
 
             <div className="space-y-1.5">
               <Label htmlFor="topic-input">
@@ -262,18 +228,10 @@ export function TopicStep({
               </p>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="base-prompt-input">
-                Base Prompt (Persistent instructions)
-              </Label>
-              <Textarea
-                id="base-prompt-input"
-                className="min-h-[88px]"
-                value={basePrompt}
-                onChange={(e) => onBasePromptChange(e.target.value)}
-                placeholder="e.g. Always be concise, use Gen Z slang, keep it funny"
-              />
-            </div>
+            <TopicBasePromptCollapsible
+              basePrompt={basePrompt}
+              onBasePromptChange={onBasePromptChange}
+            />
 
             <Button
               type="button"

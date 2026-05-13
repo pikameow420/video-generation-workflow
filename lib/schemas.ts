@@ -15,7 +15,7 @@ export const scriptsRequestSchema = z.object({
   audience: z.string().optional(),
   notes: z.string().optional(),
   basePrompt: z.string().optional(),
-  /** Voice, banned phrases, CTAs—merged into the script system prompt when set. */
+  /** Voice, banned phrases, CTAs merged into the script system prompt when set. */
   brandKit: z.string().max(8000).optional(),
 });
 
@@ -42,6 +42,9 @@ export const characterSheetResponseSchema = z.object({
   imageDataUrl: z.string().min(1),
 });
 
+export const videoProviderSchema = z.enum(["atlas", "muapi"]);
+export type VideoProvider = z.infer<typeof videoProviderSchema>;
+
 export const videoRequestSchema = z.object({
   scriptTitle: z.string().min(1),
   scriptBody: z.string().min(1),
@@ -49,10 +52,18 @@ export const videoRequestSchema = z.object({
   imageDataUrlOrUrl: z.string().min(1),
   /** Additional reference images to be used alongside imageDataUrlOrUrl. */
   referenceImageUrls: z.array(z.string().min(1)).max(9).optional(),
+  /** When set, overrides `VIDEO_PROVIDER` for this request. */
+  provider: videoProviderSchema.optional(),
 });
 export const videoResponseSchema = z.object({
   predictionId: z.string().min(1),
   videoUrl: z.string().min(1),
+});
+
+export const videoConfigResponseSchema = z.object({
+  atlasConfigured: z.boolean(),
+  muapiConfigured: z.boolean(),
+  defaultProvider: videoProviderSchema,
 });
 
 export const referenceImageSchema = z.object({
@@ -106,6 +117,10 @@ export const transcribeSubtitlesRequestSchema = z.object({
   videoUrl: z.string().min(1),
   language: z.string().optional(),
   maxCharsPerLine: z.number().int().positive().optional(),
+  /** Required when `language` is `script` (uses this text instead of Whisper). */
+  scriptBody: z.string().optional(),
+  /** From the video element; improves timing when using script-based captions. */
+  videoDurationSec: z.number().positive().finite().optional(),
 });
 
 export const transcribeSubtitlesResponseSchema = z.object({

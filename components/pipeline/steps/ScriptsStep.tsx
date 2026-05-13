@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
 
 type ScriptsStepProps = {
   scripts: ScriptOption[] | null;
@@ -32,6 +33,7 @@ type ScriptsStepProps = {
   onRefreshReferences: () => void;
   onSelectReferenceImage: (url: string) => void;
   onRemoveReferenceImage: (url: string) => void;
+  onDeleteReferenceImage: (item: ReferenceImage) => void;
   onUseSelectedReferenceDirectly: () => void;
   onGenerateSheet: () => void;
 };
@@ -54,6 +56,7 @@ export function ScriptsStep({
   onRefreshReferences,
   onSelectReferenceImage,
   onRemoveReferenceImage,
+  onDeleteReferenceImage,
   onUseSelectedReferenceDirectly,
   onGenerateSheet,
 }: ScriptsStepProps) {
@@ -176,28 +179,52 @@ export function ScriptsStep({
           {referenceImages.length ? (
             <div className="grid gap-2 sm:grid-cols-3">
               {referenceImages.slice(0, 6).map((item) => (
-                <button
+                <div
                   key={item.id}
-                  type="button"
-                  onClick={() => onSelectReferenceImage(item.url)}
                   className={cn(
-                    "group overflow-hidden rounded-lg border text-left transition",
+                    "group relative overflow-hidden rounded-lg border transition",
                     selectedReferenceUrls.includes(item.url)
                       ? "border-zinc-900 ring-1 ring-zinc-900 dark:border-zinc-100 dark:ring-zinc-100"
-                      : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700",
+                      : "border-zinc-200 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-600",
                   )}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={item.url}
-                    alt={item.originalName}
-                    className="h-24 w-full object-cover"
-                  />
-                  <span className="block truncate px-2 py-1 text-xs text-zinc-600 group-hover:text-zinc-900 dark:text-zinc-400 dark:group-hover:text-zinc-100">
-                    {selectedReferenceUrls.includes(item.url) ? "Selected - " : ""}
-                    {item.originalName}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectReferenceImage(item.url)}
+                    className="w-full text-left transition hover:border-zinc-400 dark:hover:border-zinc-600"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.url}
+                      alt={item.originalName}
+                      className="h-24 w-full object-cover"
+                    />
+                    <span className="block truncate px-2 py-1 text-xs text-zinc-600 group-hover:text-zinc-900 dark:text-zinc-400 dark:group-hover:text-zinc-100">
+                      {selectedReferenceUrls.includes(item.url) ? "Selected - " : ""}
+                      {item.originalName}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    aria-label={`Delete ${item.originalName} from library`}
+                    className={cn(
+                      "absolute right-1 top-1 z-10 flex h-7 w-7 items-center justify-center rounded-full",
+                      "bg-black/60 text-white shadow-sm transition-opacity hover:bg-black/80",
+                      "pointer-events-none opacity-0",
+                      "focus-visible:pointer-events-auto focus-visible:opacity-100",
+                      "group-hover:pointer-events-auto group-hover:opacity-100",
+                      "disabled:pointer-events-none disabled:opacity-40",
+                    )}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onDeleteReferenceImage(item);
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (

@@ -5,6 +5,7 @@ import {
   transcribeSubtitlesResponseSchema,
 } from "@/lib/schemas";
 import { getEnv } from "@/lib/env";
+import { buildCuesFromPipelineScript } from "@/lib/subtitles/from-script";
 import { toSrt } from "@/lib/subtitles/format";
 import { transcribeVideoFromUrl } from "@/lib/subtitles/transcribe";
 
@@ -37,10 +38,12 @@ function resolveSubtitleLanguageConfig(
     return {};
   }
   if (requested === "hinglish") {
+    // Use English as the Whisper language hint so output stays Latin script. `hi`
+    // strongly biases toward Devanagari, which defeats "Roman Hindi" captions.
     return {
-      language: "hi",
+      language: "en",
       prompt:
-        "Transcribe spoken Hindi/Hinglish in Roman script only. Use Latin letters and do not output Devanagari characters.",
+        "Transcription is Hinglish: casual mix of spoken English and Hindi, written ONLY with Latin/Roman letters. Keep English phrases in normal spelling; write Hindi parts in everyday roman Hindi (no formal IAST unless obvious). Absolutely no Devanagari or other non-Latin scripts. No translation into Hindi—transcribe what was said.",
     };
   }
   return { language: requested };
@@ -55,6 +58,39 @@ export async function POST(req: Request) {
       body.maxCharsPerLine ?? env.SUBTITLE_MAX_CHARS_PER_LINE;
     const maxSecondsPerCue = env.SUBTITLE_MAX_SECONDS_PER_CUE;
     const maxWordsPerCue = env.SUBTITLE_MAX_WORDS_PER_CUE;
+
+    if (body.language?.trim().toLowerCase() === "script") {
+      const scriptBody = body.scriptBody?.trim() ?? "";
+      if (!scriptBody.length) {
+        return NextResponse.json(
+          { error: "scriptBody is required when language is script" },
+          { status: 400 },
+        );
+      }
+      const durationSec =
+        body.videoDurationSec !== undefined && body.videoDurationSec > 0
+          ? body.videoDurationSec
+          : 15;
+      const cues = buildCuesFromPipelineScript(scriptBody, {
+        durationSec,
+        maxCharsPerLine,
+        maxSecondsPerCue,
+        maxWordsPerCue,
+      });
+      if (!cues.length) {
+        return NextResponse.json(
+          { error: "Could not build subtitles from script (empty after parsing)" },
+          { status: 400 },
+        );
+      }
+      const response = transcribeSubtitlesResponseSchema.parse({
+        cues,
+        srtText: toSrt(cues),
+        estimatedChars: cues.reduce((sum, cue) => sum + cue.text.length, 0),
+      });
+      return NextResponse.json(response);
+    }
+
     const subtitleConfig = resolveSubtitleLanguageConfig(
       body.language,
       env.SUBTITLE_DEFAULT_LANGUAGE,

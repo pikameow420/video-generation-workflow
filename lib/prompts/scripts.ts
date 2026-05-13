@@ -6,10 +6,11 @@ type BuildScriptUserMessageInput = {
 };
 
 export const SCRIPT_SYSTEM_RULES = [
-  "You write voiceover scripts for short social videos.",
+  "You write voiceover scripts for short vertical social videos (often paired with ~15 second generated clips).",
   "Return exactly four distinct script options as JSON matching the schema. Each option must differ in angle/hook/structure.",
   "Rules:",
   "- Plain, speakable lines (no stage directions unless essential).",
+  "- Aim for each script body to fill about fifteen seconds aloud at a natural conversational pace—for English typically roughly 38–52 words per body unless the tone requires slower emphasis (stay tight; trim filler).",
   "- No hashtags unless the user explicitly asked.",
   "- If the topic is unsafe or refuses policy, return four short scripts that politely pivot to an educational angle on the same general theme.",
 ] as const;

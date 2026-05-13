@@ -3,11 +3,19 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import type { VideoProvider } from "@/lib/schemas";
 
 type SheetStepProps = {
   busy: boolean;
   sheetUrl: string;
   sheetSource: "generated" | "uploaded";
+  videoProvider: VideoProvider;
+  onVideoProviderChange: (next: VideoProvider) => void;
+  videoProviderEnvLoaded: boolean;
+  atlasConfigured: boolean;
+  muapiConfigured: boolean;
+  /** Whether the selected backend is configured on the server. */
+  canStartVideo: boolean;
   onStartVideo: () => void;
   onRegenerate: () => void;
 };
@@ -16,6 +24,12 @@ export function SheetStep({
   busy,
   sheetUrl,
   sheetSource,
+  videoProvider,
+  onVideoProviderChange,
+  videoProviderEnvLoaded,
+  atlasConfigured,
+  muapiConfigured,
+  canStartVideo,
   onStartVideo,
   onRegenerate,
 }: SheetStepProps) {
@@ -39,10 +53,32 @@ export function SheetStep({
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 pt-2">
+        <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:items-center">
+          {videoProviderEnvLoaded ? (
+            <label className="flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+              Video backend
+              <select
+                value={videoProvider}
+                disabled={busy}
+                onChange={(e) =>
+                  onVideoProviderChange(e.target.value as VideoProvider)
+                }
+                className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs font-medium text-zinc-900 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+              >
+                <option value="atlas" disabled={!atlasConfigured}>
+                  480p
+                </option>
+                <option value="muapi" disabled={!muapiConfigured}>
+                  720p
+                </option>
+              </select>
+            </label>
+          ) : (
+            <span className="text-xs text-zinc-400">Loading video backends…</span>
+          )}
           <Button
             type="button"
-            disabled={busy}
+            disabled={busy || !canStartVideo}
             onClick={onStartVideo}
             className="rounded-full px-6"
           >
@@ -66,7 +102,9 @@ export function SheetStep({
         </div>
 
         <p className="text-xs text-zinc-500">
-          Video generation uses Atlas Cloud Seedance reference-to-video (async).
+          {videoProvider === "muapi"
+            ? "720p"
+            : "480p"}
         </p>
       </CardContent>
     </Card>
