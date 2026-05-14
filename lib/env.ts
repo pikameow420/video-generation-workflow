@@ -75,6 +75,8 @@ const envSchema = z.object({
     .default("9:16"),
   MUAPI_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(3000),
   MUAPI_POLL_MAX_MS: z.coerce.number().int().positive().default(900_000),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

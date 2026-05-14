@@ -708,9 +708,6 @@ export function PipelineWizard() {
           scriptTitle: scriptEdit.title,
           scriptBody: scriptEdit.body,
           imageDataUrlOrUrl: sheetUrl,
-          referenceImageUrls: selectedReferenceUrls.length
-            ? selectedReferenceUrls
-            : undefined,
           provider: videoProvider,
         },
         "Video failed",
@@ -721,13 +718,7 @@ export function PipelineWizard() {
       setVideoStatus("Done.");
       toast.success("Video generated.");
     }, "Request failed");
-  }, [
-    runApiAction,
-    scriptEdit,
-    selectedReferenceUrls,
-    sheetUrl,
-    videoProvider,
-  ]);
+  }, [runApiAction, scriptEdit, sheetUrl, videoProvider]);
 
   const onUploadReference = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {

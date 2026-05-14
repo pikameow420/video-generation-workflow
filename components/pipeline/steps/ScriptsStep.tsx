@@ -152,8 +152,8 @@ export function ScriptsStep({
             Reuse Or Upload Your Own Photo
           </p>
           <p className="text-xs text-zinc-500">
-            Selected references are used in character sheet generation and all selected
-            assets are sent to video generation.
+            Selected references steer character sheet generation only. Video uses the
+            sheet from the next step.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex cursor-pointer items-center rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted">

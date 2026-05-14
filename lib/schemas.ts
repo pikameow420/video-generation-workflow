@@ -48,10 +48,8 @@ export type VideoProvider = z.infer<typeof videoProviderSchema>;
 export const videoRequestSchema = z.object({
   scriptTitle: z.string().min(1),
   scriptBody: z.string().min(1),
-  /** Full data URL (data:image/...;base64,...) or HTTPS URL to an image. */
+  /** Character sheet image: data URL (data:image/...;base64,...) or HTTPS URL. */
   imageDataUrlOrUrl: z.string().min(1),
-  /** Additional reference images to be used alongside imageDataUrlOrUrl. */
-  referenceImageUrls: z.array(z.string().min(1)).max(9).optional(),
   /** When set, overrides `VIDEO_PROVIDER` for this request. */
   provider: videoProviderSchema.optional(),
 });

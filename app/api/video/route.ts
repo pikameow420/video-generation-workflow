@@ -279,14 +279,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const candidates = [
+    const sheetImageUrl = await resolveImageUrl(
       body.imageDataUrlOrUrl,
-      ...(body.referenceImageUrls ?? []),
-    ].filter(Boolean);
-    const resolved = await Promise.all(
-      candidates.map((candidate) => resolveImageUrl(candidate, req, provider)),
+      req,
+      provider,
     );
-    const imageUrls = Array.from(new Set(resolved.filter(Boolean))) as string[];
+    const imageUrls = sheetImageUrl ? [sheetImageUrl] : [];
 
     if (!imageUrls.length) {
       throw new Error("Could not resolve image URL for video generation");
