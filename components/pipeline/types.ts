@@ -55,5 +55,5 @@ export type WizardSnapshot = {
   subtitleVideoDurationSec: number | null;
   subtitleSrt: string;
   subtitleChars: number | null;
-  captionedVideoUrl: string | null;
+  videoHasCaptions: boolean;
 };

@@ -122,9 +122,7 @@ export function PipelineWizard() {
   const [subtitleVideoDurationSec, setSubtitleVideoDurationSec] = useState<
     number | null
   >(null);
-  const [captionedVideoUrl, setCaptionedVideoUrl] = useState<string | null>(
-    null,
-  );
+  const [videoHasCaptions, setVideoHasCaptions] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -242,7 +240,7 @@ export function PipelineWizard() {
       subtitleVideoDurationSec,
       subtitleSrt,
       subtitleChars,
-      captionedVideoUrl,
+      videoHasCaptions,
     }),
     [
       isScriptSidebarOpen,
@@ -271,7 +269,7 @@ export function PipelineWizard() {
       subtitleVideoDurationSec,
       subtitleSrt,
       subtitleChars,
-      captionedVideoUrl,
+      videoHasCaptions,
     ],
   );
 
@@ -316,8 +314,16 @@ export function PipelineWizard() {
     }
     if (loaded.subtitleSrt !== undefined) setSubtitleSrt(loaded.subtitleSrt);
     if (loaded.subtitleChars !== undefined) setSubtitleChars(loaded.subtitleChars);
-    if (loaded.captionedVideoUrl !== undefined) {
-      setCaptionedVideoUrl(loaded.captionedVideoUrl);
+    if (loaded.videoHasCaptions !== undefined) {
+      setVideoHasCaptions(loaded.videoHasCaptions);
+    } else if (
+      "captionedVideoUrl" in loaded &&
+      typeof (loaded as { captionedVideoUrl?: string | null }).captionedVideoUrl ===
+        "string"
+    ) {
+      const legacy = (loaded as { captionedVideoUrl: string }).captionedVideoUrl;
+      setVideoUrl(legacy);
+      setVideoHasCaptions(true);
     }
   }, []);
 
@@ -698,7 +704,7 @@ export function PipelineWizard() {
       setVideoMeta(null);
       setSubtitleSrt("");
       setSubtitleChars(null);
-      setCaptionedVideoUrl(null);
+      setVideoHasCaptions(false);
       setSubtitleVideoDurationSec(null);
       setVideoStatus("Starting video job...");
       setStep("video");
@@ -715,6 +721,7 @@ export function PipelineWizard() {
       );
       setVideoUrl(data.videoUrl);
       setVideoMeta({ predictionId: data.predictionId });
+      setVideoHasCaptions(false);
       setVideoStatus("Done.");
       toast.success("Video generated.");
     }, "Request failed");
@@ -788,7 +795,7 @@ export function PipelineWizard() {
     setSheetSource("uploaded");
     setVideoUrl(null);
     setVideoMeta(null);
-    setCaptionedVideoUrl(null);
+    setVideoHasCaptions(false);
     setSubtitleSrt("");
     setSubtitleChars(null);
     setSubtitleVideoDurationSec(null);
@@ -826,7 +833,7 @@ export function PipelineWizard() {
       if (!data.srtText) throw new Error("Subtitle generation failed");
       setSubtitleSrt(data.srtText);
       setSubtitleChars(data.estimatedChars ?? null);
-      setCaptionedVideoUrl(null);
+      setVideoHasCaptions(false);
       toast.success("Subtitles generated.");
     }, "Subtitle generation failed");
   }, [
@@ -838,20 +845,25 @@ export function PipelineWizard() {
   ]);
 
   const burnSubtitles = useCallback(async () => {
-    if (!videoUrl || !subtitleSrt.trim()) return;
+    if (!videoUrl || !subtitleSrt.trim() || !videoMeta?.predictionId) return;
     toast.info("Burning subtitles into video...");
     await runApiAction(async () => {
       const data = await postJson(
         "/api/subtitles/burn",
-        { videoUrl, srtText: subtitleSrt },
+        {
+          videoUrl,
+          srtText: subtitleSrt,
+          predictionId: videoMeta.predictionId,
+        },
         "Caption burn failed",
         burnSubtitlesResponseSchema,
       );
-      if (!data.captionedVideoUrl) throw new Error("Caption burn failed");
-      setCaptionedVideoUrl(data.captionedVideoUrl);
+      if (!data.videoUrl) throw new Error("Caption burn failed");
+      setVideoUrl(data.videoUrl);
+      setVideoHasCaptions(true);
       toast.success("Captioned video ready.");
     }, "Caption burn failed");
-  }, [runApiAction, subtitleSrt, videoUrl]);
+  }, [runApiAction, subtitleSrt, videoMeta, videoUrl]);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-10 sm:px-6 lg:pr-[380px]">
@@ -983,7 +995,7 @@ export function PipelineWizard() {
           subtitleLanguage={subtitleLanguage}
           subtitleChars={subtitleChars}
           subtitleVideoDurationSec={subtitleVideoDurationSec}
-          captionedVideoUrl={captionedVideoUrl}
+          videoHasCaptions={videoHasCaptions}
           videoMeta={videoMeta}
           onStartVideo={() => void startVideo()}
           onGoTopic={() => setStep("topic")}

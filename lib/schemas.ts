@@ -130,7 +130,9 @@ export const transcribeSubtitlesResponseSchema = z.object({
 export const burnSubtitlesRequestSchema = z.object({
   videoUrl: z.string().min(1),
   srtText: z.string().min(1),
+  predictionId: z.string().min(1),
 });
 export const burnSubtitlesResponseSchema = z.object({
-  captionedVideoUrl: z.string().min(1),
+  videoUrl: z.string().min(1),
+  hasCaptions: z.literal(true),
 });

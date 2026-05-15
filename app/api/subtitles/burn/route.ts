@@ -11,7 +11,7 @@ import {
   INSTAGRAM_SUBTITLE_STYLE,
   ffmpegSubtitleStyle,
 } from "@/lib/subtitles/style";
-import { putCaptionedVideo } from "@/lib/uploads/captioned-video-store";
+import { putPipelineVideo } from "@/lib/uploads/pipeline-video-store";
 
 const execFileAsync = promisify(execFile);
 
@@ -95,12 +95,13 @@ export async function POST(req: Request) {
     ]);
 
     const outputBytes = new Uint8Array(await readFile(outputPath));
-    const saved = await putCaptionedVideo({
+    const saved = await putPipelineVideo({
       bytes: outputBytes,
-      originalName: "instagram-captioned",
+      predictionId: body.predictionId,
+      hasCaptions: true,
     });
 
-    return NextResponse.json({ captionedVideoUrl: saved.url });
+    return NextResponse.json({ videoUrl: saved.url, hasCaptions: true as const });
   } catch (err) {
     if (err instanceof ZodError) {
       return NextResponse.json(

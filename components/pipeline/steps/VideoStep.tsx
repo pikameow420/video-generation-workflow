@@ -17,7 +17,7 @@ type VideoStepProps = {
   subtitleChars: number | null;
   /** Playback length detected from preview; Caption language uses this for timings. */
   subtitleVideoDurationSec: number | null;
-  captionedVideoUrl: string | null;
+  videoHasCaptions: boolean;
   videoMeta: { predictionId: string } | null;
   onStartVideo: () => void;
   onGoTopic: () => void;
@@ -37,7 +37,7 @@ export function VideoStep({
   subtitleLanguage,
   subtitleChars,
   subtitleVideoDurationSec,
-  captionedVideoUrl,
+  videoHasCaptions,
   videoMeta,
   onStartVideo,
   onGoTopic,
@@ -74,9 +74,21 @@ export function VideoStep({
 
         {!busy && videoUrl ? (
           <div className="space-y-5">
-            <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                Preview
+            <div
+              className={`space-y-3 rounded-xl border p-4 ${
+                videoHasCaptions
+                  ? "border-green-200 bg-green-50 dark:border-green-900/40 dark:bg-green-950/20"
+                  : "border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/30"
+              }`}
+            >
+              <p
+                className={`text-xs font-semibold uppercase tracking-wider ${
+                  videoHasCaptions
+                    ? "text-green-800 dark:text-green-200"
+                    : "text-zinc-500"
+                }`}
+              >
+                {videoHasCaptions ? "Captioned video" : "Preview"}
               </p>
               <div className="overflow-hidden rounded-lg border border-zinc-200 bg-black dark:border-zinc-800">
                 <video
@@ -100,7 +112,7 @@ export function VideoStep({
                   rel="noreferrer"
                   className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
                 >
-                  Download Raw Video ↗
+                  Download video ↗
                 </a>
                 {videoMeta ? (
                   <span className="text-xs text-zinc-500">
@@ -147,13 +159,15 @@ export function VideoStep({
                   Burn subtitles
                 </Button>
                 {subtitleChars !== null ? (
-                  <span className="text-xs text-zinc-500">Subtitle chars: {subtitleChars}</span>
+                  <span className="text-xs text-zinc-500">
+                    Subtitle chars: {subtitleChars}
+                  </span>
                 ) : null}
               </div>
               {subtitleLanguage === "script" ? (
                 <p className="text-xs text-zinc-500">
-                  Uses the script you edited in step 2 (not speech-to-text). Cue timing stretches
-                  across the clip length detected from this preview{" "}
+                  Uses the script you edited in step 2 (not speech-to-text). Cue timing
+                  stretches across the clip length detected from this preview{" "}
                   {subtitleVideoDurationSec != null
                     ? `(~${subtitleVideoDurationSec.toFixed(1)}s)`
                     : "—wait for playback to initialise, or timings default to ~15s"}
@@ -167,37 +181,16 @@ export function VideoStep({
                 onChange={(e) => onSubtitleSrtChange(e.target.value)}
               />
             </div>
-
-            {captionedVideoUrl ? (
-              <div className="space-y-3 rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-900/40 dark:bg-green-950/20">
-                <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                  Instagram-ready captioned video
-                </p>
-                <div className="overflow-hidden rounded-lg border border-zinc-200 bg-black dark:border-zinc-800">
-                  <video
-                    key={captionedVideoUrl}
-                    className="max-h-[600px] w-full object-contain"
-                    src={captionedVideoUrl}
-                    controls
-                    playsInline
-                  />
-                </div>
-                <a
-                  href={captionedVideoUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-                >
-                  Download Captioned Video ↗
-                </a>
-              </div>
-            ) : null}
           </div>
         ) : null}
 
         {!busy && !videoUrl ? (
           <div className="flex items-center gap-3">
-            <Button type="button" onClick={sheetUrl ? onStartVideo : onGoTopic} className="rounded-full">
+            <Button
+              type="button"
+              onClick={sheetUrl ? onStartVideo : onGoTopic}
+              className="rounded-full"
+            >
               {sheetUrl ? "Retry Video Generation" : "Start Over"}
             </Button>
           </div>

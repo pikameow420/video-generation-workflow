@@ -9,6 +9,7 @@ import {
   waitForAtlasAssetReady,
   waitForVideoFromScriptAndImageUrl,
 } from "@/lib/seedance/client";
+import { ingestRemotePipelineVideo } from "@/lib/uploads/pipeline-video-store";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -254,6 +255,17 @@ async function assetizeImageUrls(imageUrls: string[]): Promise<string[]> {
   return Array.from(new Set(converted));
 }
 
+async function persistGeneratedVideo(result: {
+  videoUrl: string;
+  predictionId: string;
+}): Promise<{ videoUrl: string; predictionId: string }> {
+  const saved = await ingestRemotePipelineVideo({
+    sourceUrl: result.videoUrl,
+    predictionId: result.predictionId,
+  });
+  return { videoUrl: saved.url, predictionId: result.predictionId };
+}
+
 export async function POST(req: Request) {
   try {
     const json = await req.json();
@@ -306,7 +318,7 @@ export async function POST(req: Request) {
         scriptBody: body.scriptBody,
         imageUrls,
       });
-      return NextResponse.json(result);
+      return NextResponse.json(await persistGeneratedVideo(result));
     }
 
     const preparedImageRefs =
@@ -333,7 +345,7 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json(await persistGeneratedVideo(result));
   } catch (err) {
     if (err instanceof ZodError) {
       return NextResponse.json(
