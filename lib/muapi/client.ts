@@ -91,6 +91,8 @@ export async function startMuapiOmniReferenceJob(params: {
   imageUrls: string[];
   aspectRatio: string;
   duration: number;
+  /** Public HTTPS URLs from MuAPI `upload_file`, same order as @audioN in prompt. */
+  audioFileUrls?: string[];
 }): Promise<string> {
   const root = apiV1Root(params.baseUrl);
   const path = params.endpoint.replace(/^\/+/, "");
@@ -100,6 +102,10 @@ export async function startMuapiOmniReferenceJob(params: {
     aspect_ratio: params.aspectRatio,
     duration: params.duration,
   };
+  const audio = params.audioFileUrls?.filter(Boolean) ?? [];
+  if (audio.length) {
+    body.audio_files = audio;
+  }
 
   const res = await fetch(`${root}/${path}`, {
     method: "POST",
@@ -203,6 +209,8 @@ export async function waitForMuapiVideoFromScriptAndImageUrls(options: {
   scriptTitle: string;
   scriptBody: string;
   imageUrls: string[];
+  /** Public URLs from MuAPI upload_file, max 3 — order matches @audio1…@audio3. */
+  audioUrls?: string[];
 }): Promise<{ videoUrl: string; predictionId: string }> {
   const env = getEnv();
   const apiKey = env.MUAPI_API_KEY?.trim();
@@ -210,10 +218,12 @@ export async function waitForMuapiVideoFromScriptAndImageUrls(options: {
     throw new Error("MUAPI_API_KEY is required for MuAPI video generation");
   }
 
+  const audioUrls = options.audioUrls?.filter(Boolean) ?? [];
   const prompt = buildMuapiOmniReferencePrompt(
     options.scriptTitle,
     options.scriptBody,
     options.imageUrls.length,
+    audioUrls.length,
   );
 
   const requestId = await startMuapiOmniReferenceJob({
@@ -224,6 +234,7 @@ export async function waitForMuapiVideoFromScriptAndImageUrls(options: {
     imageUrls: options.imageUrls,
     aspectRatio: env.MUAPI_VIDEO_ASPECT_RATIO,
     duration: env.MUAPI_VIDEO_DURATION,
+    audioFileUrls: audioUrls.length ? audioUrls : undefined,
   });
 
   const deadline = Date.now() + env.MUAPI_POLL_MAX_MS;

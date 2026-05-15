@@ -38,6 +38,8 @@ import {
   savedScriptSchema,
   scriptsResponseSchema,
   transcribeSubtitlesResponseSchema,
+  maxMuapiAudioBytesPerFile,
+  maxMuapiAudioFiles,
   videoConfigResponseSchema,
   videoResponseSchema,
   type VideoProvider,
@@ -49,6 +51,18 @@ const MAX_MANUAL_SCRIPT_FILE_BYTES = 256 * 1024;
 const WIZARD_STORAGE_KEY = "video-pipeline-wizard-state-v1";
 const MAX_REFERENCE_IMAGES = 9;
 const VIDEO_PROVIDER_STORAGE_KEY = "pipeline-video-provider";
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Could not read file"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
+}
 
 function readStoredVideoProvider(): VideoProvider | null {
   if (typeof window === "undefined") return null;
@@ -123,6 +137,11 @@ export function PipelineWizard() {
     number | null
   >(null);
   const [videoHasCaptions, setVideoHasCaptions] = useState(false);
+  /** True only during `/api/video` — SheetStep uses this instead of shared `busy` for the primary CTA label. */
+  const [videoGenerationBusy, setVideoGenerationBusy] = useState(false);
+  /** MuAPI only: data URLs for optional voice reference audio (not persisted in localStorage). */
+  const [muapiAudioDataUrls, setMuapiAudioDataUrls] = useState<string[]>([]);
+  const [muapiAudioFileNames, setMuapiAudioFileNames] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -147,6 +166,10 @@ export function PipelineWizard() {
 
   const persistVideoProvider = useCallback((next: VideoProvider) => {
     setVideoProvider(next);
+    if (next !== "muapi") {
+      setMuapiAudioDataUrls([]);
+      setMuapiAudioFileNames([]);
+    }
     try {
       localStorage.setItem(VIDEO_PROVIDER_STORAGE_KEY, next);
     } catch {
@@ -695,37 +718,100 @@ export function PipelineWizard() {
     selectedReferenceUrls,
     trackSheetScriptSelection,
   ]);
+  
+  const onClearMuapiAudio = useCallback(() => {
+    setMuapiAudioDataUrls([]);
+    setMuapiAudioFileNames([]);
+  }, []);
+
+  const onMuapiAudioFilesChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files ?? []);
+      e.currentTarget.value = "";
+      if (!files.length) return;
+
+      const take = files.slice(0, maxMuapiAudioFiles);
+      if (files.length > maxMuapiAudioFiles) {
+        toast.info(`Using the first ${maxMuapiAudioFiles} audio files.`);
+      }
+
+      void (async () => {
+        for (const f of take) {
+          const lower = f.name.toLowerCase();
+          if (!lower.endsWith(".mp3") && !lower.endsWith(".wav")) {
+            toast.error("Voice reference must be MP3 or WAV.");
+            return;
+          }
+          if (f.size > maxMuapiAudioBytesPerFile) {
+            toast.error(
+              `Each file must be ≤ ${Math.round(
+                maxMuapiAudioBytesPerFile / (1024 * 1024),
+              )}MB.`,
+            );
+            return;
+          }
+        }
+        try {
+          const urls: string[] = [];
+          const names: string[] = [];
+          for (const f of take) {
+            urls.push(await fileToDataUrl(f));
+            names.push(f.name);
+          }
+          setMuapiAudioDataUrls(urls);
+          setMuapiAudioFileNames(names);
+          toast.success(
+            urls.length === 1
+              ? "Voice reference attached for @audio1."
+              : `${urls.length} audio samples attached (@audio1…@audio${urls.length}).`,
+          );
+        } catch {
+          toast.error("Could not read audio files.");
+        }
+      })();
+    },
+    [],
+  );
 
   const startVideo = useCallback(async () => {
     if (!sheetUrl) return;
     toast.info("Preparing references and starting video job...");
     await runApiAction(async () => {
-      setVideoUrl(null);
-      setVideoMeta(null);
-      setSubtitleSrt("");
-      setSubtitleChars(null);
-      setVideoHasCaptions(false);
-      setSubtitleVideoDurationSec(null);
-      setVideoStatus("Starting video job...");
-      setStep("video");
-      const data = await postJson(
-        "/api/video",
-        {
+      setVideoGenerationBusy(true);
+      try {
+        setVideoUrl(null);
+        setVideoMeta(null);
+        setSubtitleSrt("");
+        setSubtitleChars(null);
+        setVideoHasCaptions(false);
+        setSubtitleVideoDurationSec(null);
+        setVideoStatus("Starting video job...");
+        setStep("video");
+        const payload: Record<string, unknown> = {
           scriptTitle: scriptEdit.title,
           scriptBody: scriptEdit.body,
           imageDataUrlOrUrl: sheetUrl,
           provider: videoProvider,
-        },
-        "Video failed",
-        videoResponseSchema,
-      );
-      setVideoUrl(data.videoUrl);
-      setVideoMeta({ predictionId: data.predictionId });
-      setVideoHasCaptions(false);
-      setVideoStatus("Done.");
-      toast.success("Video generated.");
+        };
+        if (videoProvider === "muapi" && muapiAudioDataUrls.length > 0) {
+          payload.audioDataUrls = muapiAudioDataUrls;
+        }
+        const data = await postJson(
+          "/api/video",
+          payload,
+          "Video failed",
+          videoResponseSchema,
+        );
+        setVideoUrl(data.videoUrl);
+        setVideoMeta({ predictionId: data.predictionId });
+        setVideoHasCaptions(false);
+        setVideoStatus("Done.");
+        toast.success("Video generated.");
+      } finally {
+        setVideoGenerationBusy(false);
+      }
     }, "Request failed");
-  }, [runApiAction, scriptEdit, sheetUrl, videoProvider]);
+  }, [runApiAction, scriptEdit, sheetUrl, videoProvider, muapiAudioDataUrls]);
 
   const onUploadReference = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
@@ -971,6 +1057,10 @@ export function PipelineWizard() {
           atlasConfigured={videoProviderEnv.atlasConfigured}
           muapiConfigured={videoProviderEnv.muapiConfigured}
           canStartVideo={videoBackendReady}
+          videoGenerationBusy={videoGenerationBusy}
+          muapiAudioFileNames={muapiAudioFileNames}
+          onMuapiAudioFilesChange={onMuapiAudioFilesChange}
+          onClearMuapiAudio={onClearMuapiAudio}
           onStartVideo={() => void startVideo()}
           onRegenerate={() =>
             sheetSource === "uploaded" ? setStep("scripts") : void generateSheet()

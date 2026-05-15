@@ -45,6 +45,9 @@ export const characterSheetResponseSchema = z.object({
 export const videoProviderSchema = z.enum(["atlas", "muapi"]);
 export type VideoProvider = z.infer<typeof videoProviderSchema>;
 
+export const maxMuapiAudioFiles = 3;
+export const maxMuapiAudioBytesPerFile = 12 * 1024 * 1024;
+
 export const videoRequestSchema = z.object({
   scriptTitle: z.string().min(1),
   scriptBody: z.string().min(1),
@@ -52,6 +55,11 @@ export const videoRequestSchema = z.object({
   imageDataUrlOrUrl: z.string().min(1),
   /** When set, overrides `VIDEO_PROVIDER` for this request. */
   provider: videoProviderSchema.optional(),
+  /** MuAPI only: up to 3 audio data URLs (MP3/WAV) for Omni Reference `audio_files`; slots @audio1…@audio3. */
+  audioDataUrls: z
+    .array(z.string().min(1))
+    .max(maxMuapiAudioFiles)
+    .optional(),
 });
 export const videoResponseSchema = z.object({
   predictionId: z.string().min(1),

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { videoRequestSchema, type VideoProvider } from "@/lib/schemas";
+import { maxMuapiAudioBytesPerFile, videoRequestSchema, type VideoProvider } from "@/lib/schemas";
 import { getEnv } from "@/lib/env";
+import { parseMuapiAudioDataUrl } from "@/lib/muapi/audio-data-url";
 import { uploadMuapiFile, waitForMuapiVideoFromScriptAndImageUrls } from "@/lib/muapi/client";
 import {
   createAtlasAssetFromUrl,
@@ -189,6 +190,8 @@ function httpStatusForVideoError(message: string): number {
   const likelyClient =
     lower.includes("could not resolve image url") ||
     lower.includes("must be a data:image") ||
+    lower.includes("must be data:audio") ||
+    lower.includes("audio sample") ||
     lower.includes("muapi_api_key is required") ||
     lower.includes("atlascloud_api_key is required") ||
     lower.includes("insufficient credits") ||
@@ -273,6 +276,16 @@ export async function POST(req: Request) {
     const env = getEnv();
     const provider = body.provider ?? env.VIDEO_PROVIDER;
 
+    if (body.audioDataUrls?.length && provider !== "muapi") {
+      return NextResponse.json(
+        {
+          error:
+            "Audio reference samples are only supported with the MuAPI (720p) video backend.",
+        },
+        { status: 400 },
+      );
+    }
+
     if (provider === "atlas" && !env.ATLASCLOUD_API_KEY?.trim()) {
       return NextResponse.json(
         {
@@ -313,10 +326,37 @@ export async function POST(req: Request) {
         );
       }
 
+      const audioUrls: string[] = [];
+      if (body.audioDataUrls?.length) {
+        const apiKey = env.MUAPI_API_KEY!.trim();
+        for (let i = 0; i < body.audioDataUrls.length; i++) {
+          const parsed = parseMuapiAudioDataUrl(body.audioDataUrls[i]!, i);
+          if (parsed.buffer.length > maxMuapiAudioBytesPerFile) {
+            return NextResponse.json(
+              {
+                error: `Audio sample ${i + 1} is too large (max ${Math.round(
+                  maxMuapiAudioBytesPerFile / (1024 * 1024),
+                )}MB per file).`,
+              },
+              { status: 400 },
+            );
+          }
+          const { url } = await uploadMuapiFile({
+            apiKey,
+            baseUrl: env.MUAPI_BASE_URL,
+            buffer: parsed.buffer,
+            filename: parsed.filename,
+            contentType: parsed.contentType,
+          });
+          audioUrls.push(url);
+        }
+      }
+
       const result = await waitForMuapiVideoFromScriptAndImageUrls({
         scriptTitle: body.scriptTitle,
         scriptBody: body.scriptBody,
         imageUrls,
+        audioUrls: audioUrls.length ? audioUrls : undefined,
       });
       return NextResponse.json(await persistGeneratedVideo(result));
     }

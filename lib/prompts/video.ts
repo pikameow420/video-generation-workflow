@@ -44,18 +44,44 @@ const MUAPI_OMNI_RULES = [
   "- Preserve style and visual identity across the full clip.",
 ] as const;
 
-/** Prompt for MuAPI Seedance Omni Reference: uses @image1… slots matching `images_list` order (max 4000 chars). */
+/** Prompt for MuAPI Seedance Omni Reference: uses @image1… and optional @audio1… (max 4000 chars). */
 export function buildMuapiOmniReferencePrompt(
   scriptTitle: string,
   scriptBody: string,
   imageCount: number,
+  audioCount = 0,
 ): string {
   const refLine =
     imageCount > 0
       ? `Condition on every reference image: @image1 through @image${imageCount} (same order as images_list).`
       : null;
 
-  const headerParts = [...MUAPI_OMNI_RULES, refLine, "", `Title: ${scriptTitle}`, "Narration / voiceover script:"];
+  const audioLines: string[] = [];
+  if (audioCount > 0 && audioCount <= 3) {
+    const hasManualAudioRef = /@audio\d/.test(scriptBody);
+    if (!hasManualAudioRef) {
+      if (audioCount === 1) {
+        audioLines.push("Use @audio1 as the voice reference.");
+      } else if (audioCount === 2) {
+        audioLines.push(
+          "Use @audio1 as the voice reference. Use @audio2 as an additional audio reference where appropriate.",
+        );
+      } else {
+        audioLines.push(
+          "Use @audio1 as the voice reference. Use @audio2 and @audio3 as additional audio references where appropriate.",
+        );
+      }
+    }
+  }
+
+  const headerParts = [
+    ...MUAPI_OMNI_RULES,
+    refLine,
+    ...audioLines,
+    "",
+    `Title: ${scriptTitle}`,
+    "Narration / voiceover script:",
+  ];
   const header = headerParts.filter(Boolean).join("\n");
   const text = `${header}\n${scriptBody}`;
   if (text.length <= MUAPI_PROMPT_MAX_CHARS) return text;
