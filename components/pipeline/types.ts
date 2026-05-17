@@ -30,6 +30,8 @@ export type PendingVideoJob = {
   predictionId: string;
   provider: "atlas" | "muapi";
   startedAt: string;
+  /** Script title — sent with status polls so the vault row can store a label. */
+  title?: string;
 };
 
 export type WizardSnapshot = {

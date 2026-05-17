@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LibraryVideoCard } from "@/components/library/LibraryVideoCard";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -88,43 +89,21 @@ export default async function LibraryPage({
         </Card>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2">
-          {items.map((item) => (
-            <li key={item.id}>
-              <Card className="overflow-hidden rounded-2xl border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950/70">
-                <div className="aspect-[9/16] max-h-[min(60vh,480px)] bg-zinc-950">
-                  <video
-                    className="h-full w-full object-contain"
-                    controls
-                    playsInline
-                    preload="metadata"
-                    src={item.url}
-                  />
-                </div>
-                <div className="space-y-1 p-3 text-xs text-zinc-600 dark:text-zinc-400">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-mono text-[11px] text-zinc-500">
-                      {item.id}
-                    </span>
-                    {item.hasCaptions ? (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">
-                        Captioned
-                      </span>
-                    ) : null}
-                  </div>
-                  <p>{formatWhen(item.updatedAt)}</p>
-                  <p>{formatBytes(item.bytes)}</p>
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-                  >
-                    Open in new tab
-                  </a>
-                </div>
-              </Card>
-            </li>
-          ))}
+          {items.map((item) => {
+            const displayTitle = item.title?.trim() || "Untitled";
+            return (
+              <li key={item.id}>
+                <LibraryVideoCard
+                  id={item.id}
+                  displayTitle={displayTitle}
+                  videoUrl={item.url}
+                  hasCaptions={item.hasCaptions}
+                  updatedLabel={formatWhen(item.updatedAt)}
+                  bytesLabel={formatBytes(item.bytes)}
+                />
+              </li>
+            );
+          })}
         </ul>
       )}
 

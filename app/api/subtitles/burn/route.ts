@@ -89,6 +89,7 @@ export async function POST(req: Request) {
       bytes: outputBytes,
       predictionId: body.predictionId,
       hasCaptions: true,
+      title: body.title,
     });
 
     return NextResponse.json({ videoUrl: saved.url, hasCaptions: true as const });
