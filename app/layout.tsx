@@ -50,10 +50,10 @@ export default function RootLayout({
                 Pipeline
               </Link>
               <Link
-                href="/videos"
+                href="/library"
                 className="text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
               >
-                Video library
+                Library
               </Link>
             </nav>
           </div>

@@ -17,6 +17,7 @@ export async function GET(req: Request) {
     const query = videoStatusQuerySchema.parse({
       predictionId: url.searchParams.get("predictionId"),
       provider: url.searchParams.get("provider"),
+      title: url.searchParams.get("title"),
     });
 
     const existing = await getPipelineVideoRecord(query.predictionId);
@@ -52,6 +53,7 @@ export async function GET(req: Request) {
     const saved = await ingestRemotePipelineVideo({
       sourceUrl: outcome.videoUrl,
       predictionId: query.predictionId,
+      title: query.title,
     });
 
     return NextResponse.json({

@@ -11,6 +11,8 @@ export type PendingVideoJob = {
   predictionId: string;
   provider: VideoProvider;
   startedAt: string;
+  /** Script title — sent with `/api/video/status` polls for library label. */
+  title?: string;
 };
 
 const DEFAULT_POLL_MS = 20_000;
@@ -54,6 +56,9 @@ export function useVideoJobPoll({
           predictionId: pendingJob.predictionId,
           provider: pendingJob.provider,
         });
+        if (pendingJob.title?.trim()) {
+          params.set("title", pendingJob.title.trim().slice(0, 200));
+        }
         const data = await getJson(
           `/api/video/status?${params.toString()}`,
           "Video status check failed",
