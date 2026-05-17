@@ -103,6 +103,24 @@ export const videoConfigResponseSchema = z.object({
   defaultProvider: videoProviderSchema,
 });
 
+/** One stored pipeline output (Supabase Storage + signed playback URL). */
+export const pipelineVideoListItemSchema = z.object({
+  id: z.string().min(1),
+  url: z.string().min(1),
+  bytes: z.number().int().nonnegative(),
+  hasCaptions: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const pipelineVideoListResponseSchema = z.object({
+  items: z.array(pipelineVideoListItemSchema),
+  total: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+  persistence: z.enum(["supabase", "none"]),
+});
+
 export const referenceImageSchema = z.object({
   id: z.string(),
   url: z.string().min(1),

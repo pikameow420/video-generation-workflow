@@ -1,12 +1,8 @@
 "use client";
 
-import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useCallback, useMemo, useState } from "react";
 
 import { ScriptHistorySidebar } from "@/components/pipeline/ScriptHistorySidebar";
-import { ScriptsStep } from "@/components/pipeline/steps/ScriptsStep";
-import { SheetStep } from "@/components/pipeline/steps/SheetStep";
-import { TopicStep } from "@/components/pipeline/steps/TopicStep";
-import { VideoStep } from "@/components/pipeline/steps/VideoStep";
 import type {
   PendingVideoJob,
   ReferenceImage,
@@ -18,76 +14,38 @@ import type {
   SubtitleLanguage,
   WizardSnapshot,
 } from "@/components/pipeline/types";
+import { WizardSummaryCard } from "@/components/pipeline/WizardSummaryCard";
+import { ScriptsStep } from "@/components/pipeline/steps/ScriptsStep";
+import { SheetStep } from "@/components/pipeline/steps/SheetStep";
+import { TopicStep } from "@/components/pipeline/steps/TopicStep";
+import { VideoStep } from "@/components/pipeline/steps/VideoStep";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+
+import {
+  dedupeReferenceUrls,
+  fileToDataUrl,
+  MAX_MANUAL_SCRIPT_FILE_BYTES,
+  normalizeReferenceUrl,
+  WIZARD_STORAGE_KEY,
+} from "@/lib/pipeline/wizard-utils";
+import { deleteJson, postForm, postJson } from "@/lib/api/client";
 import { useApiAction } from "@/hooks/useApiAction";
-import { useVideoJobPoll } from "@/hooks/useVideoJobPoll";
+import { useCreatorPresets } from "@/hooks/useCreatorPresets";
+import { usePipelineLibraryApi } from "@/hooks/usePipelineLibraryApi";
+import { usePipelineVideoProvider } from "@/hooks/usePipelineVideoProvider";
+import { useWizardSubtitleActions } from "@/hooks/useWizardSubtitleActions";
+import { useWizardPendingVideoJob } from "@/hooks/useWizardPendingVideoJob";
 import { useWizardLocalStorage } from "@/hooks/useWizardLocalStorage";
-import { getJson, deleteJson, postForm, postJson } from "@/lib/api/client";
 import {
-  addCreatorPreset,
-  loadCreatorPresets,
-  removeCreatorPreset,
-  type CreatorPreset,
-} from "@/lib/pipeline/creator-presets";
-import {
-  burnSubtitlesResponseSchema,
   characterSheetResponseSchema,
-  referenceImageListResponseSchema,
   referenceImageSchema,
-  savedScriptListResponseSchema,
   savedScriptSchema,
   scriptsResponseSchema,
-  transcribeSubtitlesResponseSchema,
   maxMuapiAudioBytesPerFile,
   maxMuapiAudioFiles,
-  videoConfigResponseSchema,
   videoStartResponseSchema,
-  type VideoProvider,
 } from "@/lib/schemas";
-import { Check } from "lucide-react";
 import { toast } from "sonner";
-
-const MAX_MANUAL_SCRIPT_FILE_BYTES = 256 * 1024;
-const WIZARD_STORAGE_KEY = "video-pipeline-wizard-state-v1";
-const MAX_REFERENCE_IMAGES = 9;
-const VIDEO_PROVIDER_STORAGE_KEY = "pipeline-video-provider";
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("Could not read file"));
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
-    reader.readAsDataURL(file);
-  });
-}
-
-function readStoredVideoProvider(): VideoProvider | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(VIDEO_PROVIDER_STORAGE_KEY);
-  return raw === "atlas" || raw === "muapi" ? raw : null;
-}
-
-function normalizeReferenceUrl(url: string): string {
-  return url.trim();
-}
-
-function dedupeReferenceUrls(urls: string[]): string[] {
-  const seen = new Set<string>();
-  const deduped: string[] = [];
-  for (const raw of urls) {
-    const normalized = normalizeReferenceUrl(raw);
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    deduped.push(normalized);
-    if (deduped.length >= MAX_REFERENCE_IMAGES) break;
-  }
-  return deduped;
-}
 
 export function PipelineWizard() {
   const [isScriptSidebarOpen, setIsScriptSidebarOpen] = useState(true);
@@ -98,7 +56,6 @@ export function PipelineWizard() {
   const [notes, setNotes] = useState("");
   const [basePrompt, setBasePrompt] = useState("");
   const [brandKit, setBrandKit] = useState("");
-  const [presets, setPresets] = useState<CreatorPreset[]>([]);
   const [scriptMode, setScriptMode] = useState<ScriptMode>("generate");
   const [saveManualScript, setSaveManualScript] = useState(true);
   const [manualScriptSource, setManualScriptSource] = useState<
@@ -150,80 +107,32 @@ export function PipelineWizard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [videoProvider, setVideoProvider] = useState<VideoProvider>("atlas");
-  const [videoProviderEnv, setVideoProviderEnv] = useState<{
-    loaded: boolean;
-    atlasConfigured: boolean;
-    muapiConfigured: boolean;
-  }>({
-    loaded: false,
-    atlasConfigured: false,
-    muapiConfigured: false,
+  const {
+    presets,
+    applyCreatorPreset,
+    saveCreatorPresetFromForm,
+    deleteCreatorPresetById,
+  } = useCreatorPresets({
+    setTopic,
+    setTone,
+    setAudience,
+    setNotes,
+    setBasePrompt,
+    setBrandKit,
+    setArtDirection,
   });
 
-  const videoBackendReady = useMemo(() => {
-    if (!videoProviderEnv.loaded) return false;
-    return (
-      (videoProvider === "atlas" && videoProviderEnv.atlasConfigured) ||
-      (videoProvider === "muapi" && videoProviderEnv.muapiConfigured)
-    );
-  }, [videoProvider, videoProviderEnv]);
-
-  const persistVideoProvider = useCallback((next: VideoProvider) => {
-    setVideoProvider(next);
-    if (next !== "muapi") {
-      setMuapiAudioDataUrls([]);
-      setMuapiAudioFileNames([]);
-    }
-    try {
-      localStorage.setItem(VIDEO_PROVIDER_STORAGE_KEY, next);
-    } catch {
-      /* ignore */
-    }
+  const clearMuapiAudio = useCallback(() => {
+    setMuapiAudioDataUrls([]);
+    setMuapiAudioFileNames([]);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const cfg = await getJson(
-          "/api/video/config",
-          "Video provider config failed",
-          videoConfigResponseSchema,
-        );
-        if (cancelled) return;
-
-        const stored = readStoredVideoProvider();
-        let next: VideoProvider = stored ?? cfg.defaultProvider;
-
-        if (next === "atlas" && !cfg.atlasConfigured && cfg.muapiConfigured) {
-          next = "muapi";
-        }
-        if (next === "muapi" && !cfg.muapiConfigured && cfg.atlasConfigured) {
-          next = "atlas";
-        }
-
-        setVideoProvider(next);
-        try {
-          localStorage.setItem(VIDEO_PROVIDER_STORAGE_KEY, next);
-        } catch {
-          /* ignore */
-        }
-        setVideoProviderEnv({
-          loaded: true,
-          atlasConfigured: cfg.atlasConfigured,
-          muapiConfigured: cfg.muapiConfigured,
-        });
-      } catch {
-        if (!cancelled) {
-          setVideoProviderEnv((prev) => ({ ...prev, loaded: true }));
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const {
+    videoProvider,
+    persistVideoProvider,
+    videoProviderEnv,
+    videoBackendReady,
+  } = usePipelineVideoProvider(clearMuapiAudio);
 
   const runApiAction = useApiAction({
     onError: (message) => {
@@ -234,28 +143,39 @@ export function PipelineWizard() {
     clearError: () => setError(null),
   });
 
-  useVideoJobPoll({
-    pendingJob: pendingVideoJob,
-    onProcessing: () => {
-      setVideoStatus("Generating video…");
-    },
-    onCompleted: ({ predictionId, videoUrl, hasCaptions }) => {
-      setVideoUrl(videoUrl);
-      setVideoMeta({ predictionId });
-      setVideoHasCaptions(hasCaptions);
-      setPendingVideoJob(null);
-      setVideoStatus("Done.");
-      setVideoGenerationBusy(false);
-      setStep("video");
-      toast.success("Video generated.");
-    },
-    onFailed: (message) => {
-      setPendingVideoJob(null);
-      setVideoStatus("");
-      setVideoGenerationBusy(false);
-      setError(message);
-      toast.error(message);
-    },
+  const { loadReferenceImages, loadSavedScripts } = usePipelineLibraryApi({
+    setReferenceImages,
+    setLoadingReferenceImages,
+    setSavedScripts,
+    setSavedScriptsLoaded,
+    setLoadingSavedScripts,
+    setError,
+  });
+
+  useWizardPendingVideoJob({
+    pendingVideoJob,
+    setVideoUrl,
+    setVideoMeta,
+    setVideoHasCaptions,
+    setPendingVideoJob,
+    setVideoStatus,
+    setVideoGenerationBusy,
+    setStep,
+    setError,
+  });
+
+  const { generateSubtitles, burnSubtitles } = useWizardSubtitleActions({
+    runApiAction,
+    videoUrl,
+    subtitleLanguage,
+    scriptBody: scriptEdit.body,
+    subtitleVideoDurationSec,
+    subtitleSrt,
+    videoMeta,
+    setSubtitleSrt,
+    setSubtitleChars,
+    setVideoHasCaptions,
+    setVideoUrl,
   });
 
   const selectedScript = scripts?.find((script) => script.id === selectedId) ?? null;
@@ -391,93 +311,6 @@ export function PipelineWizard() {
     restore: restoreSnapshot,
     snapshot,
   });
-
-  useEffect(() => {
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (!cancelled) setPresets(loadCreatorPresets());
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const applyCreatorPreset = useCallback((p: CreatorPreset) => {
-    setTopic(p.topic);
-    setTone(p.tone);
-    setAudience(p.audience);
-    setNotes(p.notes);
-    setBasePrompt(p.basePrompt);
-    setBrandKit(p.brandKit);
-    setArtDirection(p.artDirection);
-    toast.success(`Loaded “${p.name}”`);
-  }, []);
-
-  const saveCreatorPresetFromForm = useCallback(
-    (name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) {
-        toast.error("Name your preset first");
-        return;
-      }
-      const preset: CreatorPreset = {
-        id: crypto.randomUUID(),
-        name: trimmed.slice(0, 80),
-        createdAt: new Date().toISOString(),
-        topic,
-        tone,
-        audience,
-        notes,
-        basePrompt,
-        artDirection,
-        brandKit,
-      };
-      setPresets(addCreatorPreset(preset));
-      toast.success("Preset saved");
-    },
-    [topic, tone, audience, notes, basePrompt, artDirection, brandKit],
-  );
-
-  const deleteCreatorPresetById = useCallback((id: string) => {
-    if (!id) return;
-    setPresets(removeCreatorPreset(id));
-    toast.success("Preset removed");
-  }, []);
-
-  const loadReferenceImages = useCallback(async () => {
-    try {
-      setLoadingReferenceImages(true);
-      const data = await getJson(
-        "/api/reference-images",
-        "Could not load reference image library",
-        referenceImageListResponseSchema,
-      );
-      setReferenceImages(data.items ?? []);
-    } catch (error) {
-      setError(
-        error instanceof Error ? error.message : "Failed to load reference images",
-      );
-    } finally {
-      setLoadingReferenceImages(false);
-    }
-  }, []);
-
-  const loadSavedScripts = useCallback(async () => {
-    try {
-      setLoadingSavedScripts(true);
-      const data = await getJson(
-        "/api/scripts/library",
-        "Failed to load saved scripts",
-        savedScriptListResponseSchema,
-      );
-      setSavedScripts(data.items ?? []);
-      setSavedScriptsLoaded(true);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to load saved scripts");
-    } finally {
-      setLoadingSavedScripts(false);
-    }
-  }, []);
 
   const goScripts = useCallback(() => {
     setStep("scripts");
@@ -926,68 +759,28 @@ export function PipelineWizard() {
     setStep("sheet");
   }, [selectedReferenceUrls]);
 
-  const generateSubtitles = useCallback(async () => {
-    if (!videoUrl) return;
-    if (subtitleLanguage === "script" && !scriptEdit.body.trim()) {
-      toast.error("There is no script body to use for captions. Go back and pick or enter a script.");
-      return;
-    }
-    toast.info("Generating subtitles...");
-    await runApiAction(async () => {
-      const payload: Record<string, unknown> = {
-        videoUrl,
-        language: subtitleLanguage,
-      };
-      if (subtitleLanguage === "script") {
-        payload.scriptBody = scriptEdit.body.trim();
-        if (
-          subtitleVideoDurationSec != null &&
-          Number.isFinite(subtitleVideoDurationSec) &&
-          subtitleVideoDurationSec > 0
-        ) {
-          payload.videoDurationSec = subtitleVideoDurationSec;
-        }
-      }
-      const data = await postJson(
-        "/api/subtitles/transcribe",
-        payload,
-        "Subtitle generation failed",
-        transcribeSubtitlesResponseSchema,
-      );
-      if (!data.srtText) throw new Error("Subtitle generation failed");
-      setSubtitleSrt(data.srtText);
-      setSubtitleChars(data.estimatedChars ?? null);
-      setVideoHasCaptions(false);
-      toast.success("Subtitles generated.");
-    }, "Subtitle generation failed");
-  }, [
-    runApiAction,
-    scriptEdit.body,
-    subtitleLanguage,
-    subtitleVideoDurationSec,
-    videoUrl,
-  ]);
-
-  const burnSubtitles = useCallback(async () => {
-    if (!videoUrl || !subtitleSrt.trim() || !videoMeta?.predictionId) return;
-    toast.info("Burning subtitles into video...");
-    await runApiAction(async () => {
-      const data = await postJson(
-        "/api/subtitles/burn",
-        {
-          videoUrl,
-          srtText: subtitleSrt,
-          predictionId: videoMeta.predictionId,
-        },
-        "Caption burn failed",
-        burnSubtitlesResponseSchema,
-      );
-      if (!data.videoUrl) throw new Error("Caption burn failed");
-      setVideoUrl(data.videoUrl);
-      setVideoHasCaptions(true);
-      toast.success("Captioned video ready.");
-    }, "Caption burn failed");
-  }, [runApiAction, subtitleSrt, videoMeta, videoUrl]);
+  const onSavePreset = useCallback(
+    (name: string) =>
+      saveCreatorPresetFromForm(name, {
+        topic,
+        tone,
+        audience,
+        notes,
+        basePrompt,
+        brandKit,
+        artDirection,
+      }),
+    [
+      saveCreatorPresetFromForm,
+      topic,
+      tone,
+      audience,
+      notes,
+      basePrompt,
+      brandKit,
+      artDirection,
+    ],
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-10 sm:px-6 lg:pr-[380px]">
@@ -1033,7 +826,7 @@ export function PipelineWizard() {
           onBasePromptChange={setBasePrompt}
           onBrandKitChange={setBrandKit}
           onApplyPreset={applyCreatorPreset}
-          onSavePreset={saveCreatorPresetFromForm}
+          onSavePreset={onSavePreset}
           onDeletePreset={deleteCreatorPresetById}
           onScriptEditChange={setScriptEdit}
           onSaveManualScriptChange={setSaveManualScript}
@@ -1044,7 +837,7 @@ export function PipelineWizard() {
           onManualBodyInput={() => setManualScriptSource("manual")}
         />
       ) : (
-        <SummaryCard
+        <WizardSummaryCard
           title={scriptMode === "manual" ? "Manual Script Mode" : "Topic Defined"}
           detail={
             scriptMode === "manual" ? scriptEdit.title || "Custom script entry" : topic
@@ -1077,7 +870,7 @@ export function PipelineWizard() {
           onGenerateSheet={() => void generateSheet()}
         />
       ) : isScriptsDone && scriptEdit.body.trim() ? (
-        <SummaryCard
+        <WizardSummaryCard
           title="Script Selected"
           detail={scriptEdit.title || "Untitled script"}
           onEdit={goScripts}
@@ -1105,7 +898,7 @@ export function PipelineWizard() {
           }
         />
       ) : isSheetDone && sheetUrl ? (
-        <SummaryCard
+        <WizardSummaryCard
           title="Character Sheet Generated"
           detail="Ready for video generation"
           thumbnailUrl={sheetUrl}
@@ -1153,53 +946,5 @@ export function PipelineWizard() {
         onExpandedHistoryIdChange={setExpandedHistoryId}
       />
     </div>
-  );
-}
-
-function SummaryCard({
-  title,
-  detail,
-  thumbnailUrl,
-  onEdit,
-}: {
-  title: string;
-  detail: string;
-  thumbnailUrl?: string;
-  onEdit: () => void;
-}) {
-  return (
-    <Card className="rounded-2xl border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/70">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900">
-            <Check className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                Done
-              </span>
-              <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                {title}
-              </h3>
-            </div>
-            <p className="mt-1 line-clamp-1 text-sm text-zinc-500">{detail}</p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          {thumbnailUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={thumbnailUrl}
-              className="h-12 w-12 rounded-lg border object-cover dark:border-zinc-800"
-              alt="Thumbnail"
-            />
-          ) : null}
-          <Button type="button" variant="outline" size="sm" onClick={onEdit}>
-            Edit
-          </Button>
-        </div>
-      </div>
-    </Card>
   );
 }

@@ -11,23 +11,13 @@ import {
   INSTAGRAM_SUBTITLE_STYLE,
   ffmpegSubtitleStyle,
 } from "@/lib/subtitles/style";
+import { resolveSubtitleVideoUrl } from "@/lib/subtitles/resolve-video-url";
 import { putPipelineVideo } from "@/lib/uploads/pipeline-video-store";
 
 const execFileAsync = promisify(execFile);
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
-
-function resolveVideoUrl(videoUrl: string, reqUrl: string): string {
-  const trimmed = videoUrl.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return trimmed;
-  }
-  if (trimmed.startsWith("/")) {
-    return new URL(trimmed, reqUrl).toString();
-  }
-  throw new Error("videoUrl must be an https URL or app-relative path");
-}
 
 function escapeFfmpegPath(value: string): string {
   return value
@@ -60,7 +50,7 @@ export async function POST(req: Request) {
   try {
     const json = await req.json();
     const body = burnSubtitlesRequestSchema.parse(json);
-    const resolvedVideoUrl = resolveVideoUrl(body.videoUrl, req.url);
+    const resolvedVideoUrl = resolveSubtitleVideoUrl(body.videoUrl, req.url);
     await ensureFfmpegExists();
     await ensureSubtitleFilterExists();
 
