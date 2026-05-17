@@ -8,7 +8,7 @@ import { listPipelineVideosPage } from "@/lib/uploads/pipeline-video-store";
 
 export const dynamic = "force-dynamic";
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 10;
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -24,7 +24,7 @@ function formatWhen(iso: string): string {
   }
 }
 
-export default async function VideosPage({
+export default async function LibraryPage({
   searchParams,
 }: {
   searchParams: Promise<{ offset?: string }>;
@@ -136,7 +136,7 @@ export default async function VideosPage({
           <div className="flex gap-2">
             {canPrev ? (
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/videos?offset=${prevOffset}`}>Previous</Link>
+                <Link href={`/library?offset=${prevOffset}`}>Previous</Link>
               </Button>
             ) : (
               <Button variant="outline" size="sm" disabled>
@@ -145,7 +145,7 @@ export default async function VideosPage({
             )}
             {canNext ? (
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/videos?offset=${nextOffset}`}>Next</Link>
+                <Link href={`/library?offset=${nextOffset}`}>Next</Link>
               </Button>
             ) : (
               <Button variant="outline" size="sm" disabled>
