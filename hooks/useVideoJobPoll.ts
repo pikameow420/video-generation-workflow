@@ -13,7 +13,7 @@ export type PendingVideoJob = {
   startedAt: string;
 };
 
-const DEFAULT_POLL_MS = 3000;
+const DEFAULT_POLL_MS = 20_000;
 const DEFAULT_MAX_MS = 900_000;
 
 export function useVideoJobPoll({

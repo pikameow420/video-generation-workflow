@@ -96,6 +96,112 @@ function TopicBasePromptCollapsible(props: {
   );
 }
 
+function TopicPresetsCollapsible(props: {
+  busy: boolean;
+  presets: CreatorPreset[];
+  onApplyPreset: (preset: CreatorPreset) => void;
+  onSavePreset: (name: string) => void;
+  onDeletePreset: (id: string) => void;
+}) {
+  const { busy, presets, onApplyPreset, onSavePreset, onDeletePreset } = props;
+  const [expanded, setExpanded] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-2 bg-zinc-50/80 px-4 py-3 text-left transition-colors hover:bg-zinc-100/90 dark:bg-zinc-900/30 dark:hover:bg-zinc-900/55"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            Saved presets ({presets.length})
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Save this topic bundle or load one you&apos;ve saved before.
+          </p>
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 dark:text-zinc-400 ${expanded ? "rotate-0" : "-rotate-90"}`}
+          aria-hidden
+        />
+      </button>
+      {expanded ? (
+        <div className="space-y-3 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          {presets.length === 0 ? (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              No presets yet—use the fields below and save current as a preset.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {presets.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-100 bg-zinc-50/50 px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900/30"
+                >
+                  <span className="min-w-0 truncate text-xs font-medium text-zinc-800 dark:text-zinc-100">
+                    {p.name}
+                  </span>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      className="h-7 text-xs"
+                      onClick={() => onApplyPreset(p)}
+                    >
+                      Apply
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      className="h-7 text-xs"
+                      onClick={() => onDeletePreset(p.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[180px] flex-1 space-y-1">
+              <Label htmlFor="preset-name-input" className="text-xs">
+                New preset name
+              </Label>
+              <Input
+                id="preset-name-input"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="e.g. Coffee shop launch"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              className="shrink-0"
+              onClick={() => {
+                onSavePreset(newName.trim());
+                setNewName("");
+              }}
+            >
+              Save current
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function TopicStep({
   scriptMode,
   busy,
@@ -161,13 +267,13 @@ export function TopicStep({
 
         {scriptMode === "generate" ? (
           <>
-            {/* <TopicPresetsCollapsible
+            <TopicPresetsCollapsible
               busy={busy}
               presets={presets}
               onApplyPreset={onApplyPreset}
               onSavePreset={onSavePreset}
               onDeletePreset={onDeletePreset}
-            /> */}
+            />
 
             <div className="space-y-1.5">
               <Label htmlFor="topic-input">

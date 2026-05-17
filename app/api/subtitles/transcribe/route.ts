@@ -7,21 +7,11 @@ import {
 import { getEnv } from "@/lib/env";
 import { buildCuesFromPipelineScript } from "@/lib/subtitles/from-script";
 import { toSrt } from "@/lib/subtitles/format";
+import { resolveSubtitleVideoUrl } from "@/lib/subtitles/resolve-video-url";
 import { transcribeVideoFromUrl } from "@/lib/subtitles/transcribe";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
-
-function resolveVideoUrl(videoUrl: string, reqUrl: string): string {
-  const trimmed = videoUrl.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return trimmed;
-  }
-  if (trimmed.startsWith("/")) {
-    return new URL(trimmed, reqUrl).toString();
-  }
-  throw new Error("videoUrl must be an https URL or app-relative path");
-}
 
 function resolveSubtitleLanguageConfig(
   input: string | undefined,
@@ -101,7 +91,7 @@ export async function POST(req: Request) {
       body.language.trim().toLowerCase() === "auto"
         ? undefined
         : subtitleConfig.language ?? env.SUBTITLE_DEFAULT_LANGUAGE;
-    const videoUrl = resolveVideoUrl(body.videoUrl, req.url);
+    const videoUrl = resolveSubtitleVideoUrl(body.videoUrl, req.url);
 
     const result = await transcribeVideoFromUrl({
       videoUrl,
