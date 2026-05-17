@@ -231,6 +231,71 @@ export async function getPipelineVideoRecord(
   return record ?? null;
 }
 
+export type PipelineVideoListRow = {
+  id: string;
+  url: string;
+  bytes: number;
+  hasCaptions: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Lists stored pipeline videos from Supabase (newest first). Returns empty when persistence is off. */
+export async function listPipelineVideosPage(input: {
+  limit: number;
+  offset: number;
+}): Promise<{ items: PipelineVideoListRow[]; total: number }> {
+  if (!isSupabasePersistenceEnabled()) {
+    return { items: [], total: 0 };
+  }
+
+  const env = getEnv();
+  const admin = createAdminClient();
+  const bucket = env.SUPABASE_PIPELINE_VIDEOS_BUCKET;
+
+  const { count, error: countError } = await admin
+    .from("pipeline_videos")
+    .select("id", { count: "exact", head: true });
+  if (countError) {
+    throw new Error(`pipeline_videos count failed: ${countError.message}`);
+  }
+
+  const total = typeof count === "number" ? count : 0;
+  const { data, error } = await admin
+    .from("pipeline_videos")
+    .select("id, storage_path, bytes, has_captions, created_at, updated_at")
+    .order("updated_at", { ascending: false })
+    .range(input.offset, input.offset + input.limit - 1);
+
+  if (error) {
+    throw new Error(`pipeline_videos list failed: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+  const items: PipelineVideoListRow[] = await Promise.all(
+    rows.map(async (row) => {
+      const objectPath =
+        typeof row.storage_path === "string" ? row.storage_path : "";
+      const url = await createStorageSignedUrl(
+        admin,
+        bucket,
+        objectPath,
+        env.SUPABASE_SIGNED_URL_EXPIRES_SEC,
+      );
+      return {
+        id: String(row.id),
+        url,
+        bytes: Number(row.bytes),
+        hasCaptions: Boolean(row.has_captions),
+        createdAt: asIso(row.created_at),
+        updatedAt: asIso(row.updated_at),
+      };
+    }),
+  );
+
+  return { items, total };
+}
+
 export async function ingestRemotePipelineVideo(input: {
   sourceUrl: string;
   predictionId: string;
