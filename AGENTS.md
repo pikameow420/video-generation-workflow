@@ -14,6 +14,7 @@ Before editing Next.js code, check relevant docs in `node_modules/next/dist/docs
 - Request/response validation lives in `lib/schemas.ts`.
 - Atlas/Seedance helpers live in `lib/seedance/client.ts`.
 - MuAPI video helpers live in `lib/muapi/client.ts`.
+- When `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SECRET_KEY` are set, Postgres + Storage back saved scripts and uploads (`lib/persistence/backend.ts`).
 
 ## Development
 

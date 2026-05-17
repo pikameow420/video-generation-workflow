@@ -1,0 +1,8 @@
+# Supabase CLI local dev (https://supabase.com/docs/guides/cli/config)
+project_id = "video-generation-workflow"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15

@@ -77,6 +77,11 @@ const envSchema = z.object({
   MUAPI_POLL_MAX_MS: z.coerce.number().int().positive().default(900_000),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
+  /** Service role — server-only. When set with NEXT_PUBLIC_SUPABASE_URL, persistence uses Supabase. */
+  SUPABASE_SECRET_KEY: z.string().min(1).optional(),
+  SUPABASE_REFERENCE_IMAGES_BUCKET: z.string().min(1).default("reference-images"),
+  SUPABASE_PIPELINE_VIDEOS_BUCKET: z.string().min(1).default("pipeline-videos"),
+  SUPABASE_SIGNED_URL_EXPIRES_SEC: z.coerce.number().int().positive().max(86400).default(3600),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

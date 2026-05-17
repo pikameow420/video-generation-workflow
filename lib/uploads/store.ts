@@ -3,6 +3,13 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { BlobNotFoundError, del, put } from "@vercel/blob";
 import { getEnv } from "@/lib/env";
+import { isSupabasePersistenceEnabled } from "@/lib/persistence/backend";
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  createStorageSignedUrl,
+  removeStorageObject,
+  uploadStorageObject,
+} from "@/lib/supabase/storage";
 
 export type ReferenceImageRecord = {
   id: string;
@@ -119,9 +126,131 @@ async function putBlobReferenceImage(
   return record;
 }
 
+function asIso(ts: unknown): string {
+  if (typeof ts === "string") return ts;
+  if (ts instanceof Date) return ts.toISOString();
+  return new Date(ts as never).toISOString();
+}
+
+async function putReferenceImageSupabase(
+  input: PutReferenceImageInput,
+): Promise<ReferenceImageRecord> {
+  const env = getEnv();
+  const admin = createAdminClient();
+  const bucket = env.SUPABASE_REFERENCE_IMAGES_BUCKET;
+  const id = randomUUID();
+  const ext = extFromMime(input.mimeType);
+  const safeBase = sanitizeFileBase(input.originalName);
+  const objectPath = `${safeBase}-${id}.${ext}`;
+
+  await uploadStorageObject(
+    admin,
+    bucket,
+    objectPath,
+    input.bytes,
+    input.mimeType,
+  );
+
+  const createdAt = new Date().toISOString();
+  const { error } = await admin.from("reference_images").insert({
+    id,
+    storage_path: objectPath,
+    mime_type: input.mimeType,
+    bytes: input.bytes.byteLength,
+    original_name: input.originalName,
+    created_at: createdAt,
+  });
+  if (error) {
+    throw new Error(`reference_images insert failed: ${error.message}`);
+  }
+
+  const url = await createStorageSignedUrl(
+    admin,
+    bucket,
+    objectPath,
+    env.SUPABASE_SIGNED_URL_EXPIRES_SEC,
+  );
+  return {
+    id,
+    url,
+    mimeType: input.mimeType,
+    bytes: input.bytes.byteLength,
+    originalName: input.originalName,
+    createdAt,
+  };
+}
+
+async function listReferenceImagesSupabase(): Promise<ReferenceImageRecord[]> {
+  const env = getEnv();
+  const admin = createAdminClient();
+  const bucket = env.SUPABASE_REFERENCE_IMAGES_BUCKET;
+  const expires = env.SUPABASE_SIGNED_URL_EXPIRES_SEC;
+  const { data, error } = await admin
+    .from("reference_images")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) {
+    throw new Error(`reference_images list failed: ${error.message}`);
+  }
+  if (!data?.length) return [];
+
+  const out: ReferenceImageRecord[] = [];
+  for (const row of data) {
+    const objectPath =
+      typeof row.storage_path === "string" ? row.storage_path : "";
+    const url = await createStorageSignedUrl(admin, bucket, objectPath, expires);
+    out.push({
+      id: row.id as string,
+      url,
+      mimeType: row.mime_type as string,
+      bytes: Number(row.bytes),
+      originalName: row.original_name as string,
+      createdAt: asIso(row.created_at),
+    });
+  }
+  return out;
+}
+
+async function deleteReferenceImageSupabase(id: string): Promise<void> {
+  const env = getEnv();
+  const admin = createAdminClient();
+  const bucket = env.SUPABASE_REFERENCE_IMAGES_BUCKET;
+
+  const { data: row, error: selErr } = await admin
+    .from("reference_images")
+    .select("storage_path")
+    .eq("id", id)
+    .maybeSingle();
+  if (selErr) {
+    throw new Error(`reference_images read failed: ${selErr.message}`);
+  }
+  if (!row?.storage_path) {
+    throw new ReferenceImageNotFoundError(id);
+  }
+
+  try {
+    await removeStorageObject(
+      admin,
+      bucket,
+      typeof row.storage_path === "string" ? row.storage_path : "",
+    );
+  } catch {
+    /* tolerate missing blob */
+  }
+
+  const { error: delErr } = await admin.from("reference_images").delete().eq("id", id);
+  if (delErr) {
+    throw new Error(`reference_images delete failed: ${delErr.message}`);
+  }
+}
+
 export async function putReferenceImage(
   input: PutReferenceImageInput,
 ): Promise<ReferenceImageRecord> {
+  if (isSupabasePersistenceEnabled()) {
+    return putReferenceImageSupabase(input);
+  }
+
   const env = getEnv();
   if (env.UPLOAD_BACKEND === "blob") {
     return putBlobReferenceImage(input);
@@ -130,6 +259,10 @@ export async function putReferenceImage(
 }
 
 export async function listReferenceImages(): Promise<ReferenceImageRecord[]> {
+  if (isSupabasePersistenceEnabled()) {
+    return listReferenceImagesSupabase();
+  }
+
   const env = getEnv();
   const indexPath = path.resolve(process.cwd(), env.REFERENCE_IMAGE_INDEX_PATH);
   const records = await readIndex(indexPath);
@@ -159,6 +292,10 @@ export class ReferenceImageNotFoundError extends Error {
 }
 
 export async function deleteReferenceImage(id: string): Promise<void> {
+  if (isSupabasePersistenceEnabled()) {
+    return deleteReferenceImageSupabase(id);
+  }
+
   const env = getEnv();
   const indexPath = path.resolve(process.cwd(), env.REFERENCE_IMAGE_INDEX_PATH);
   const current = await readIndex(indexPath);

@@ -11,7 +11,7 @@ The UI is a **four-step wizard**: topic & scripts → pick or edit a script & re
 
 |                     |                                                                                                                                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scripts**         | Generate **four** options via Deepseek, paste/upload your own, or pull from a **saved script library** (stored on disk / JSON index).                   |
+| **Scripts**         | Generate **four** options via Deepseek, paste/upload your own, or pull from a **saved script library** (local JSON index *or* **Supabase Postgres** when configured). |
 | **Voice & brand**   | **Base prompt**, **brand kit**, and **named presets** (topic, tone, audience, notes, art direction, etc.)—presets live in the browser’s `localStorage`. |
 | **Look**            | Generate a **3×3 character sheet** from the script (OpenAI image 2), optionally steer with **reference images** from your library.                      |
 | **Video**           | **Seedance** reference-to-video via **Atlas Cloud** or **MuAPI** (Omni Reference No Video Fast default); async poll until the clip is ready.              |
@@ -61,18 +61,22 @@ The UI is a **four-step wizard**: topic & scripts → pick or edit a script & re
 
 ## Configuration
 
-Copy env vars your deployment needs (see `**lib/env.ts`** for the full list and defaults). Minimally, for the full happy path:
+Copy env vars your deployment needs (see `**.env.example**` or `**lib/env.ts**` for defaults). Minimally, for the full happy path:
 
 - `**ATLASCLOUD_API_KEY**` — scripts + Atlas video path (required for those features)  
 - `**MUAPI_API_KEY**` — MuAPI video path only ([authentication](https://muapi.ai/docs/authentication))  
 - `**VIDEO_PROVIDER**` — default backend when the UI does not override: `atlas` or `muapi` (`lib/env.ts`)  
 - `**MUAPI_BASE_URL**`, `**MUAPI_VIDEO_ENDPOINT**`, `**MUAPI_VIDEO_DURATION**` (4–15), `**MUAPI_VIDEO_ASPECT_RATIO**`, poll tuning — see `lib/env.ts`
 - `**OPENAI_API_KEY**` — character sheet + transcription (optional but needed for those steps)
-- `**UPLOAD_BACKEND**` — `local` (default) or `blob` for Vercel Blob reference uploads
+- `**UPLOAD_BACKEND**` — `local` (default) or `blob`; affects reference images **only when Supabase is not configured** (`blob` uses Vercel Blob)
 
-**Reference images (local mode):** files under `public/uploads/reference-images`, index path configurable via `REFERENCE_IMAGE_INDEX_PATH`. On the Scripts step, hover a thumbnail and use the **X** to remove that image from the library (and index); **blob mode** needs `BLOB_READ_WRITE_TOKEN` for uploads and deletes.
+### Supabase persistence (optional)
 
-**Captioned videos (local mode):** `LOCAL_CAPTIONED_VIDEO_DIR`, `CAPTIONED_VIDEO_BASE_PATH`, `CAPTIONED_VIDEO_INDEX_PATH`.
+If **`NEXT_PUBLIC_SUPABASE_URL`** and **`SUPABASE_SECRET_KEY`** (service role, server-only) are both set, saved scripts, reference images, and pipeline MP4s go to Postgres + **private** Storage buckets. Optional: `SUPABASE_REFERENCE_IMAGES_BUCKET`, `SUPABASE_PIPELINE_VIDEOS_BUCKET`, `SUPABASE_SIGNED_URL_EXPIRES_SEC`. Apply SQL in [`supabase/migrations/`](supabase/migrations/). Optional data copy: `node scripts/migrate-to-supabase.cjs`. `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is for session refresh in [`proxy.ts`](proxy.ts), not persistence writes.
+
+**Reference images (local fallbacks apply when Supabase off):** files under `public/uploads/reference-images`, index path configurable via `REFERENCE_IMAGE_INDEX_PATH`. On the Scripts step, hover a thumbnail and use the **X** to remove that image from the library (and index); **blob mode** needs `BLOB_READ_WRITE_TOKEN` for uploads and deletes.
+
+**Captioned videos (fallback when Supabase off):** `LOCAL_CAPTIONED_VIDEO_DIR`, `CAPTIONED_VIDEO_BASE_PATH`, `CAPTIONED_VIDEO_INDEX_PATH`.
 
 **Runtime:** subtitle burn-in expects `**ffmpeg`** on the host. Serverless without ffmpeg won’t be able to burn captions unless you offload that step.
 
