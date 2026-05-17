@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { listPipelineVideosPage } from "@/lib/uploads/pipeline-video-store";
+import { listPipelineVideosPage, softDeletePipelineVideo } from "@/lib/uploads/pipeline-video-store";
 import { isSupabasePersistenceEnabled } from "@/lib/persistence/backend";
 
 export const runtime = "nodejs";
 
-const DEFAULT_LIMIT = 24;
+const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
 export async function GET(req: Request) {
@@ -31,6 +31,24 @@ export async function GET(req: Request) {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to list pipeline videos";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const id = url.searchParams.get("id")?.trim();
+    if (!id) {
+      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    }
+    await softDeletePipelineVideo(id);
+    return NextResponse.json({ ok: true as const });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Delete failed";
+    if (message === "Video not found") {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
