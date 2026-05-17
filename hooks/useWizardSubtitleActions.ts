@@ -22,6 +22,7 @@ export function useWizardSubtitleActions(options: {
   videoUrl: string | null;
   subtitleLanguage: SubtitleLanguage;
   scriptBody: string;
+  scriptTitle: string;
   subtitleVideoDurationSec: number | null;
   subtitleSrt: string;
   videoMeta: { predictionId: string } | null;
@@ -38,6 +39,7 @@ export function useWizardSubtitleActions(options: {
     videoUrl,
     subtitleLanguage,
     scriptBody,
+    scriptTitle,
     subtitleVideoDurationSec,
     subtitleSrt,
     videoMeta,
@@ -104,6 +106,9 @@ export function useWizardSubtitleActions(options: {
           videoUrl,
           srtText: subtitleSrt,
           predictionId: videoMeta.predictionId,
+          ...(scriptTitle.trim()
+            ? { title: scriptTitle.trim().slice(0, 200) }
+            : {}),
         },
         "Caption burn failed",
         burnSubtitlesResponseSchema,
@@ -116,6 +121,7 @@ export function useWizardSubtitleActions(options: {
   }, [
     runApiAction,
     subtitleSrt,
+    scriptTitle,
     videoMeta,
     videoUrl,
     setVideoHasCaptions,
