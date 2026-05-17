@@ -3,17 +3,16 @@ import { ZodError } from "zod";
 import { maxMuapiAudioBytesPerFile, videoRequestSchema, type VideoProvider } from "@/lib/schemas";
 import { getEnv } from "@/lib/env";
 import { parseMuapiAudioDataUrl } from "@/lib/muapi/audio-data-url";
-import { uploadMuapiFile, waitForMuapiVideoFromScriptAndImageUrls } from "@/lib/muapi/client";
+import { startMuapiVideoJob, uploadMuapiFile } from "@/lib/muapi/client";
 import {
   createAtlasAssetFromUrl,
+  startAtlasVideoJob,
   uploadMediaFile,
   waitForAtlasAssetReady,
-  waitForVideoFromScriptAndImageUrl,
 } from "@/lib/seedance/client";
-import { ingestRemotePipelineVideo } from "@/lib/uploads/pipeline-video-store";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 function parseImageRef(s: string): {
   remoteUrl?: string;
@@ -258,17 +257,6 @@ async function assetizeImageUrls(imageUrls: string[]): Promise<string[]> {
   return Array.from(new Set(converted));
 }
 
-async function persistGeneratedVideo(result: {
-  videoUrl: string;
-  predictionId: string;
-}): Promise<{ videoUrl: string; predictionId: string }> {
-  const saved = await ingestRemotePipelineVideo({
-    sourceUrl: result.videoUrl,
-    predictionId: result.predictionId,
-  });
-  return { videoUrl: saved.url, predictionId: result.predictionId };
-}
-
 export async function POST(req: Request) {
   try {
     const json = await req.json();
@@ -352,13 +340,17 @@ export async function POST(req: Request) {
         }
       }
 
-      const result = await waitForMuapiVideoFromScriptAndImageUrls({
+      const predictionId = await startMuapiVideoJob({
         scriptTitle: body.scriptTitle,
         scriptBody: body.scriptBody,
         imageUrls,
         audioUrls: audioUrls.length ? audioUrls : undefined,
       });
-      return NextResponse.json(await persistGeneratedVideo(result));
+      return NextResponse.json({
+        predictionId,
+        status: "processing" as const,
+        provider: "muapi" as const,
+      });
     }
 
     const preparedImageRefs =
@@ -366,9 +358,9 @@ export async function POST(req: Request) {
         ? await assetizeImageUrls(imageUrls)
         : imageUrls;
 
-    let result;
+    let predictionId: string;
     try {
-      result = await waitForVideoFromScriptAndImageUrl({
+      predictionId = await startAtlasVideoJob({
         scriptTitle: body.scriptTitle,
         scriptBody: body.scriptBody,
         imageUrls: preparedImageRefs,
@@ -378,14 +370,18 @@ export async function POST(req: Request) {
         throw err;
       }
       const assetRefs = await assetizeImageUrls(preparedImageRefs);
-      result = await waitForVideoFromScriptAndImageUrl({
+      predictionId = await startAtlasVideoJob({
         scriptTitle: body.scriptTitle,
         scriptBody: body.scriptBody,
         imageUrls: assetRefs,
       });
     }
 
-    return NextResponse.json(await persistGeneratedVideo(result));
+    return NextResponse.json({
+      predictionId,
+      status: "processing" as const,
+      provider: "atlas" as const,
+    });
   } catch (err) {
     if (err instanceof ZodError) {
       return NextResponse.json(

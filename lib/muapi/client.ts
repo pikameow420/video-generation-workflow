@@ -205,6 +205,81 @@ function extractErrorMessage(error: unknown): string {
   return "Video generation failed";
 }
 
+export type VideoPollOutcome =
+  | { status: "processing" }
+  | { status: "completed"; videoUrl: string }
+  | { status: "failed"; error: string };
+
+export async function startMuapiVideoJob(options: {
+  scriptTitle: string;
+  scriptBody: string;
+  imageUrls: string[];
+  audioUrls?: string[];
+}): Promise<string> {
+  const env = getEnv();
+  const apiKey = env.MUAPI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("MUAPI_API_KEY is required for MuAPI video generation");
+  }
+
+  const audioUrls = options.audioUrls?.filter(Boolean) ?? [];
+  const prompt = buildMuapiOmniReferencePrompt(
+    options.scriptTitle,
+    options.scriptBody,
+    options.imageUrls.length,
+    audioUrls.length,
+  );
+
+  return startMuapiOmniReferenceJob({
+    apiKey,
+    baseUrl: env.MUAPI_BASE_URL,
+    endpoint: env.MUAPI_VIDEO_ENDPOINT,
+    prompt,
+    imageUrls: options.imageUrls,
+    aspectRatio: env.MUAPI_VIDEO_ASPECT_RATIO,
+    duration: env.MUAPI_VIDEO_DURATION,
+    audioFileUrls: audioUrls.length ? audioUrls : undefined,
+  });
+}
+
+export async function pollMuapiVideoOnce(
+  requestId: string,
+): Promise<VideoPollOutcome> {
+  const env = getEnv();
+  const apiKey = env.MUAPI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("MUAPI_API_KEY is required for MuAPI video generation");
+  }
+
+  const { ok, data } = await getMuapiPredictionResult({
+    apiKey,
+    baseUrl: env.MUAPI_BASE_URL,
+    requestId,
+  });
+
+  if (!ok) {
+    return { status: "failed", error: extractErrorMessage(data.error) };
+  }
+
+  const status = String(data.status ?? "").toLowerCase();
+  if (status === "completed" || status === "succeeded") {
+    const videoUrl = extractVideoUrl(data);
+    if (!videoUrl) {
+      return {
+        status: "failed",
+        error: "MuAPI returned success but no video URL was found in outputs",
+      };
+    }
+    return { status: "completed", videoUrl };
+  }
+
+  if (status === "failed") {
+    return { status: "failed", error: extractErrorMessage(data.error) };
+  }
+
+  return { status: "processing" };
+}
+
 export async function waitForMuapiVideoFromScriptAndImageUrls(options: {
   scriptTitle: string;
   scriptBody: string;

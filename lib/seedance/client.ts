@@ -397,6 +397,78 @@ export type WaitForVideoResult = {
   predictionId: string;
 };
 
+export type VideoPollOutcome =
+  | { status: "processing" }
+  | { status: "completed"; videoUrl: string }
+  | { status: "failed"; error: string };
+
+export async function startAtlasVideoJob(options: {
+  scriptTitle: string;
+  scriptBody: string;
+  imageUrls: string[];
+}): Promise<string> {
+  const env = getEnv();
+  const apiKey = env.ATLASCLOUD_API_KEY;
+  if (!apiKey?.trim()) {
+    throw new Error(
+      "ATLASCLOUD_API_KEY is required (see .env.example)",
+    );
+  }
+
+  const prompt = buildVideoPrompt(
+    options.scriptTitle,
+    options.scriptBody,
+    options.imageUrls,
+  );
+
+  return startVideoGeneration({
+    apiKey,
+    baseUrl: env.ATLASCLOUD_BASE_URL,
+    model: env.ATLASCLOUD_VIDEO_MODEL,
+    prompt,
+    imageUrls: options.imageUrls,
+    duration: env.ATLASCLOUD_VIDEO_DURATION,
+    width: env.ATLASCLOUD_VIDEO_WIDTH,
+    height: env.ATLASCLOUD_VIDEO_HEIGHT,
+    fps: env.ATLASCLOUD_VIDEO_FPS,
+  });
+}
+
+export async function pollAtlasVideoOnce(
+  predictionId: string,
+): Promise<VideoPollOutcome> {
+  const env = getEnv();
+  const apiKey = env.ATLASCLOUD_API_KEY;
+  if (!apiKey?.trim()) {
+    throw new Error(
+      "ATLASCLOUD_API_KEY is required (see .env.example)",
+    );
+  }
+
+  const p = await getPrediction({
+    apiKey,
+    baseUrl: env.ATLASCLOUD_BASE_URL,
+    predictionId,
+  });
+
+  if (p.status === "completed" || p.status === "succeeded") {
+    const videoUrl = p.outputs?.[0];
+    if (!videoUrl) {
+      return {
+        status: "failed",
+        error: "Atlas returned success but outputs[0] was empty",
+      };
+    }
+    return { status: "completed", videoUrl };
+  }
+
+  if (p.status === "failed") {
+    return { status: "failed", error: p.error || "Video generation failed" };
+  }
+
+  return { status: "processing" };
+}
+
 export async function waitForVideoFromScriptAndImageUrl(options: {
   scriptTitle: string;
   scriptBody: string;

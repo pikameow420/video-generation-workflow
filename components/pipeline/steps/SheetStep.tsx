@@ -17,7 +17,7 @@ type SheetStepProps = {
   muapiConfigured: boolean;
   /** Whether the selected backend is configured on the server. */
   canStartVideo: boolean;
-  /** True only while `/api/video` runs — avoids “Starting video…” during sheet regenerate. */
+  /** True while a video job is starting or polling. */
   videoGenerationBusy: boolean;
   /** MuAPI Omni: optional voice reference audio (shown only for 720p). */
   muapiAudioFileNames: string[];
@@ -37,7 +37,7 @@ export function SheetStep({
   atlasConfigured,
   muapiConfigured,
   canStartVideo,
-  videoGenerationBusy,
+  videoGenerationBusy = false,
   muapiAudioFileNames,
   onMuapiAudioFilesChange,
   onClearMuapiAudio,
@@ -89,7 +89,7 @@ export function SheetStep({
           )}
           <Button
             type="button"
-            disabled={busy || !canStartVideo}
+            disabled={busy || !canStartVideo || videoGenerationBusy}
             onClick={onStartVideo}
             className="rounded-full px-6"
           >

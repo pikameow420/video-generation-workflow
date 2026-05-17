@@ -8,6 +8,7 @@ import { SheetStep } from "@/components/pipeline/steps/SheetStep";
 import { TopicStep } from "@/components/pipeline/steps/TopicStep";
 import { VideoStep } from "@/components/pipeline/steps/VideoStep";
 import type {
+  PendingVideoJob,
   ReferenceImage,
   SavedScript,
   ScriptMode,
@@ -21,6 +22,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useApiAction } from "@/hooks/useApiAction";
+import { useVideoJobPoll } from "@/hooks/useVideoJobPoll";
 import { useWizardLocalStorage } from "@/hooks/useWizardLocalStorage";
 import { getJson, deleteJson, postForm, postJson } from "@/lib/api/client";
 import {
@@ -41,7 +43,7 @@ import {
   maxMuapiAudioBytesPerFile,
   maxMuapiAudioFiles,
   videoConfigResponseSchema,
-  videoResponseSchema,
+  videoStartResponseSchema,
   type VideoProvider,
 } from "@/lib/schemas";
 import { Check } from "lucide-react";
@@ -137,6 +139,9 @@ export function PipelineWizard() {
     number | null
   >(null);
   const [videoHasCaptions, setVideoHasCaptions] = useState(false);
+  const [pendingVideoJob, setPendingVideoJob] = useState<PendingVideoJob | null>(
+    null,
+  );
   /** True only during `/api/video` — SheetStep uses this instead of shared `busy` for the primary CTA label. */
   const [videoGenerationBusy, setVideoGenerationBusy] = useState(false);
   /** MuAPI only: data URLs for optional voice reference audio (not persisted in localStorage). */
@@ -229,6 +234,30 @@ export function PipelineWizard() {
     clearError: () => setError(null),
   });
 
+  useVideoJobPoll({
+    pendingJob: pendingVideoJob,
+    onProcessing: () => {
+      setVideoStatus("Generating video…");
+    },
+    onCompleted: ({ predictionId, videoUrl, hasCaptions }) => {
+      setVideoUrl(videoUrl);
+      setVideoMeta({ predictionId });
+      setVideoHasCaptions(hasCaptions);
+      setPendingVideoJob(null);
+      setVideoStatus("Done.");
+      setVideoGenerationBusy(false);
+      setStep("video");
+      toast.success("Video generated.");
+    },
+    onFailed: (message) => {
+      setPendingVideoJob(null);
+      setVideoStatus("");
+      setVideoGenerationBusy(false);
+      setError(message);
+      toast.error(message);
+    },
+  });
+
   const selectedScript = scripts?.find((script) => script.id === selectedId) ?? null;
   const currentBatchPrimaryScript = scripts?.[0] ?? null;
   const currentBatchRemainingScripts = scripts?.slice(1) ?? [];
@@ -264,6 +293,7 @@ export function PipelineWizard() {
       subtitleSrt,
       subtitleChars,
       videoHasCaptions,
+      pendingVideoJob,
     }),
     [
       isScriptSidebarOpen,
@@ -293,6 +323,7 @@ export function PipelineWizard() {
       subtitleSrt,
       subtitleChars,
       videoHasCaptions,
+      pendingVideoJob,
     ],
   );
 
@@ -339,7 +370,12 @@ export function PipelineWizard() {
     if (loaded.subtitleChars !== undefined) setSubtitleChars(loaded.subtitleChars);
     if (loaded.videoHasCaptions !== undefined) {
       setVideoHasCaptions(loaded.videoHasCaptions);
-    } else if (
+    }
+    if (loaded.pendingVideoJob !== undefined) {
+      setPendingVideoJob(loaded.pendingVideoJob);
+    }
+    if (
+      loaded.videoHasCaptions === undefined &&
       "captionedVideoUrl" in loaded &&
       typeof (loaded as { captionedVideoUrl?: string | null }).captionedVideoUrl ===
         "string"
@@ -778,14 +814,12 @@ export function PipelineWizard() {
     toast.info("Preparing references and starting video job...");
     await runApiAction(async () => {
       setVideoGenerationBusy(true);
+      let jobStarted = false;
       try {
-        setVideoUrl(null);
-        setVideoMeta(null);
         setSubtitleSrt("");
         setSubtitleChars(null);
-        setVideoHasCaptions(false);
         setSubtitleVideoDurationSec(null);
-        setVideoStatus("Starting video job...");
+        setVideoStatus("Starting video job…");
         setStep("video");
         const payload: Record<string, unknown> = {
           scriptTitle: scriptEdit.title,
@@ -800,15 +834,19 @@ export function PipelineWizard() {
           "/api/video",
           payload,
           "Video failed",
-          videoResponseSchema,
+          videoStartResponseSchema,
         );
-        setVideoUrl(data.videoUrl);
+        const job: PendingVideoJob = {
+          predictionId: data.predictionId,
+          provider: data.provider,
+          startedAt: new Date().toISOString(),
+        };
+        setPendingVideoJob(job);
         setVideoMeta({ predictionId: data.predictionId });
-        setVideoHasCaptions(false);
-        setVideoStatus("Done.");
-        toast.success("Video generated.");
+        setVideoStatus("Generating video…");
+        jobStarted = true;
       } finally {
-        setVideoGenerationBusy(false);
+        if (!jobStarted) setVideoGenerationBusy(false);
       }
     }, "Request failed");
   }, [runApiAction, scriptEdit, sheetUrl, videoProvider, muapiAudioDataUrls]);
@@ -1057,7 +1095,7 @@ export function PipelineWizard() {
           atlasConfigured={videoProviderEnv.atlasConfigured}
           muapiConfigured={videoProviderEnv.muapiConfigured}
           canStartVideo={videoBackendReady}
-          videoGenerationBusy={videoGenerationBusy}
+          videoGenerationBusy={videoGenerationBusy || Boolean(pendingVideoJob)}
           muapiAudioFileNames={muapiAudioFileNames}
           onMuapiAudioFilesChange={onMuapiAudioFilesChange}
           onClearMuapiAudio={onClearMuapiAudio}
@@ -1077,7 +1115,7 @@ export function PipelineWizard() {
 
       {step === "video" ? (
         <VideoStep
-          busy={busy}
+          busy={busy || Boolean(pendingVideoJob) || videoGenerationBusy}
           videoStatus={videoStatus}
           videoUrl={videoUrl}
           sheetUrl={sheetUrl}

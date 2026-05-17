@@ -107,6 +107,19 @@ export async function putPipelineVideo(input: {
   return record;
 }
 
+export async function getPipelineVideoRecord(
+  predictionId: string,
+): Promise<PipelineVideoRecord | null> {
+  const id = predictionId.trim();
+  if (!id) return null;
+  const indexPath = path.resolve(
+    process.cwd(),
+    getEnv().CAPTIONED_VIDEO_INDEX_PATH,
+  );
+  const record = (await readIndex(indexPath)).find((r) => r.id === id);
+  return record ?? null;
+}
+
 export async function ingestRemotePipelineVideo(input: {
   sourceUrl: string;
   predictionId: string;

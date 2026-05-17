@@ -26,6 +26,12 @@ export type Step = "topic" | "scripts" | "sheet" | "video";
 export type ScriptMode = "generate" | "manual";
 export type SubtitleLanguage = "auto" | "en" | "hi" | "hinglish" | "script";
 
+export type PendingVideoJob = {
+  predictionId: string;
+  provider: "atlas" | "muapi";
+  startedAt: string;
+};
+
 export type WizardSnapshot = {
   isScriptSidebarOpen: boolean;
   step: Step;
@@ -56,4 +62,6 @@ export type WizardSnapshot = {
   subtitleSrt: string;
   subtitleChars: number | null;
   videoHasCaptions: boolean;
+  /** In-flight provider job — restored after refresh/sleep so polling can resume. */
+  pendingVideoJob: PendingVideoJob | null;
 };

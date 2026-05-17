@@ -61,6 +61,37 @@ export const videoRequestSchema = z.object({
     .max(maxMuapiAudioFiles)
     .optional(),
 });
+/** Returned immediately after POST /api/video starts a provider job. */
+export const videoStartResponseSchema = z.object({
+  predictionId: z.string().min(1),
+  status: z.literal("processing"),
+  provider: videoProviderSchema,
+});
+
+export const videoStatusQuerySchema = z.object({
+  predictionId: z.string().min(1),
+  provider: videoProviderSchema,
+});
+
+export const videoStatusResponseSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("processing"),
+    predictionId: z.string().min(1),
+  }),
+  z.object({
+    status: z.literal("completed"),
+    predictionId: z.string().min(1),
+    videoUrl: z.string().min(1),
+    hasCaptions: z.boolean(),
+  }),
+  z.object({
+    status: z.literal("failed"),
+    predictionId: z.string().min(1),
+    error: z.string().min(1),
+  }),
+]);
+
+/** @deprecated Use videoStartResponseSchema + videoStatusResponseSchema */
 export const videoResponseSchema = z.object({
   predictionId: z.string().min(1),
   videoUrl: z.string().min(1),
