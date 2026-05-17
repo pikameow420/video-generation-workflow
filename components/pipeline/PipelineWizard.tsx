@@ -169,6 +169,7 @@ export function PipelineWizard() {
     videoUrl,
     subtitleLanguage,
     scriptBody: scriptEdit.body,
+    scriptTitle: scriptEdit.title,
     subtitleVideoDurationSec,
     subtitleSrt,
     videoMeta,
@@ -669,10 +670,12 @@ export function PipelineWizard() {
           "Video failed",
           videoStartResponseSchema,
         );
+        const trimmedTitle = scriptEdit.title.trim().slice(0, 200);
         const job: PendingVideoJob = {
           predictionId: data.predictionId,
           provider: data.provider,
           startedAt: new Date().toISOString(),
+          ...(trimmedTitle ? { title: trimmedTitle } : {}),
         };
         setPendingVideoJob(job);
         setVideoMeta({ predictionId: data.predictionId });

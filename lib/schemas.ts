@@ -15,7 +15,6 @@ export const scriptsRequestSchema = z.object({
   audience: z.string().optional(),
   notes: z.string().optional(),
   basePrompt: z.string().optional(),
-  /** Voice, banned phrases, CTAs merged into the script system prompt when set. */
   brandKit: z.string().max(8000).optional(),
 });
 
@@ -71,6 +70,14 @@ export const videoStartResponseSchema = z.object({
 export const videoStatusQuerySchema = z.object({
   predictionId: z.string().min(1),
   provider: videoProviderSchema,
+  /** Script title for library display — passed from client poll while job runs. */
+  title: z
+    .union([z.string(), z.null(), z.undefined()])
+    .transform((s) => {
+      if (s == null || s === "") return undefined;
+      const t = s.trim().slice(0, 200);
+      return t || undefined;
+    }),
 });
 
 export const videoStatusResponseSchema = z.discriminatedUnion("status", [
@@ -111,6 +118,7 @@ export const pipelineVideoListItemSchema = z.object({
   hasCaptions: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  title: z.string().nullable(),
 });
 
 export const pipelineVideoListResponseSchema = z.object({
@@ -188,6 +196,7 @@ export const burnSubtitlesRequestSchema = z.object({
   videoUrl: z.string().min(1),
   srtText: z.string().min(1),
   predictionId: z.string().min(1),
+  title: z.string().max(200).optional(),
 });
 export const burnSubtitlesResponseSchema = z.object({
   videoUrl: z.string().min(1),

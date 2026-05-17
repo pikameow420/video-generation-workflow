@@ -9,6 +9,8 @@ import {
   uploadStorageObject,
 } from "@/lib/supabase/storage";
 
+const MAX_TITLE_LEN = 200;
+
 export type PipelineVideoRecord = {
   /** Stable key (Atlas/MuAPI prediction id). */
   id: string;
@@ -17,6 +19,10 @@ export type PipelineVideoRecord = {
   createdAt: string;
   updatedAt: string;
   hasCaptions: boolean;
+  /** Human-readable label; null when unset or legacy rows. */
+  title: string | null;
+  /** Local JSON index only — soft-remove from library without DB. */
+  isDeleted?: boolean;
 };
 
 function sanitizePredictionId(predictionId: string): string {
@@ -91,10 +97,20 @@ function asIso(ts: unknown): string {
   return new Date(ts as never).toISOString();
 }
 
+function normalizeTitleInput(
+  title: string | undefined,
+): string | null | undefined {
+  if (title === undefined) return undefined;
+  const t = title.trim().slice(0, MAX_TITLE_LEN);
+  return t || null;
+}
+
 async function putPipelineVideoSupabase(input: {
   bytes: Uint8Array;
   predictionId: string;
   hasCaptions: boolean;
+  /** Set or clear display title; omit to keep existing row title. */
+  title?: string | undefined;
 }): Promise<PipelineVideoRecord> {
   const env = getEnv();
   const id = input.predictionId.trim();
@@ -106,12 +122,24 @@ async function putPipelineVideoSupabase(input: {
   const now = new Date().toISOString();
   const { data: prevRow } = await admin
     .from("pipeline_videos")
-    .select("created_at")
+    .select("created_at, title")
     .eq("id", id)
     .maybeSingle();
+
   const createdAt = prevRow?.created_at
     ? asIso(prevRow.created_at)
     : now;
+
+  const prevTitle =
+    prevRow && typeof prevRow === "object" && "title" in prevRow
+      ? (prevRow as { title?: unknown }).title
+      : null;
+  const resolvedTitle =
+    input.title !== undefined
+      ? normalizeTitleInput(input.title) ?? null
+      : typeof prevTitle === "string"
+        ? prevTitle.slice(0, MAX_TITLE_LEN) || null
+        : null;
 
   const { error } = await admin.from("pipeline_videos").upsert(
     {
@@ -119,8 +147,10 @@ async function putPipelineVideoSupabase(input: {
       storage_path: objectPath,
       bytes: input.bytes.byteLength,
       has_captions: input.hasCaptions,
+      title: resolvedTitle,
       created_at: createdAt,
       updated_at: now,
+      is_deleted: false,
     },
     { onConflict: "id" },
   );
@@ -141,6 +171,7 @@ async function putPipelineVideoSupabase(input: {
     createdAt,
     updatedAt: now,
     hasCaptions: input.hasCaptions,
+    title: resolvedTitle,
   };
 }
 
@@ -156,6 +187,7 @@ async function getPipelineVideoRecordSupabase(
     .from("pipeline_videos")
     .select("*")
     .eq("id", id)
+    .eq("is_deleted", false)
     .maybeSingle();
   if (error) {
     throw new Error(`pipeline_videos read failed: ${error.message}`);
@@ -170,6 +202,9 @@ async function getPipelineVideoRecordSupabase(
     objectPath,
     env.SUPABASE_SIGNED_URL_EXPIRES_SEC,
   );
+  const rawTitle = (data as { title?: unknown }).title;
+  const title =
+    typeof rawTitle === "string" ? rawTitle.slice(0, MAX_TITLE_LEN) : null;
   return {
     id: data.id as string,
     url,
@@ -177,6 +212,7 @@ async function getPipelineVideoRecordSupabase(
     createdAt: asIso(data.created_at),
     updatedAt: asIso(data.updated_at),
     hasCaptions: Boolean(data.has_captions),
+    title,
   };
 }
 
@@ -184,6 +220,7 @@ export async function putPipelineVideo(input: {
   bytes: Uint8Array;
   predictionId: string;
   hasCaptions: boolean;
+  title?: string | undefined;
 }): Promise<PipelineVideoRecord> {
   const id = input.predictionId.trim();
   if (!id) {
@@ -202,6 +239,11 @@ export async function putPipelineVideo(input: {
   const now = new Date().toISOString();
   const url = await writeVideoBytes(id, input.bytes);
 
+  const resolvedTitle =
+    input.title !== undefined
+      ? normalizeTitleInput(input.title) ?? null
+      : (existing?.title ?? null);
+
   const record: PipelineVideoRecord = {
     id,
     url,
@@ -209,6 +251,8 @@ export async function putPipelineVideo(input: {
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     hasCaptions: input.hasCaptions,
+    title: resolvedTitle,
+    isDeleted: false,
   };
   await upsertIndex(record);
   return record;
@@ -228,7 +272,11 @@ export async function getPipelineVideoRecord(
     getEnv().CAPTIONED_VIDEO_INDEX_PATH,
   );
   const record = (await readIndex(indexPath)).find((r) => r.id === id);
-  return record ?? null;
+  if (!record || record.isDeleted) return null;
+  if (record.title === undefined) {
+    return { ...record, title: null };
+  }
+  return record;
 }
 
 export type PipelineVideoListRow = {
@@ -238,6 +286,7 @@ export type PipelineVideoListRow = {
   hasCaptions: boolean;
   createdAt: string;
   updatedAt: string;
+  title: string | null;
 };
 
 /** Lists stored pipeline videos from Supabase (newest first). Returns empty when persistence is off. */
@@ -255,7 +304,9 @@ export async function listPipelineVideosPage(input: {
 
   const { count, error: countError } = await admin
     .from("pipeline_videos")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("is_deleted", false);
+
   if (countError) {
     throw new Error(`pipeline_videos count failed: ${countError.message}`);
   }
@@ -263,7 +314,10 @@ export async function listPipelineVideosPage(input: {
   const total = typeof count === "number" ? count : 0;
   const { data, error } = await admin
     .from("pipeline_videos")
-    .select("id, storage_path, bytes, has_captions, created_at, updated_at")
+    .select(
+      "id, storage_path, bytes, has_captions, created_at, updated_at, title",
+    )
+    .eq("is_deleted", false)
     .order("updated_at", { ascending: false })
     .range(input.offset, input.offset + input.limit - 1);
 
@@ -282,6 +336,9 @@ export async function listPipelineVideosPage(input: {
         objectPath,
         env.SUPABASE_SIGNED_URL_EXPIRES_SEC,
       );
+      const rawTitle = (row as { title?: unknown }).title;
+      const title =
+        typeof rawTitle === "string" ? rawTitle.slice(0, MAX_TITLE_LEN) : null;
       return {
         id: String(row.id),
         url,
@@ -289,6 +346,7 @@ export async function listPipelineVideosPage(input: {
         hasCaptions: Boolean(row.has_captions),
         createdAt: asIso(row.created_at),
         updatedAt: asIso(row.updated_at),
+        title,
       };
     }),
   );
@@ -299,6 +357,7 @@ export async function listPipelineVideosPage(input: {
 export async function ingestRemotePipelineVideo(input: {
   sourceUrl: string;
   predictionId: string;
+  title?: string;
 }): Promise<PipelineVideoRecord> {
   const res = await fetch(input.sourceUrl);
   if (!res.ok) {
@@ -309,5 +368,53 @@ export async function ingestRemotePipelineVideo(input: {
     bytes,
     predictionId: input.predictionId,
     hasCaptions: false,
+    title: input.title,
   });
+}
+
+/** Soft-delete: keep row and storage object; hide from library / status shortcuts. */
+export async function softDeletePipelineVideo(predictionId: string): Promise<void> {
+  const id = predictionId.trim();
+  if (!id) throw new Error("predictionId is required");
+
+  if (isSupabasePersistenceEnabled()) {
+    const admin = createAdminClient();
+    const now = new Date().toISOString();
+    const { data, error } = await admin
+      .from("pipeline_videos")
+      .update({ is_deleted: true, updated_at: now })
+      .eq("id", id)
+      .eq("is_deleted", false)
+      .select("id");
+    if (error) {
+      throw new Error(`pipeline_videos soft-delete failed: ${error.message}`);
+    }
+    if (!data?.length) {
+      const { data: row } = await admin
+        .from("pipeline_videos")
+        .select("id, is_deleted")
+        .eq("id", id)
+        .maybeSingle();
+      if (row && (row as { is_deleted?: boolean }).is_deleted === true) {
+        return;
+      }
+      throw new Error("Video not found");
+    }
+    return;
+  }
+
+  const indexPath = path.resolve(
+    process.cwd(),
+    getEnv().CAPTIONED_VIDEO_INDEX_PATH,
+  );
+  const current = await readIndex(indexPath);
+  const record = current.find((r) => r.id === id);
+  if (!record) {
+    throw new Error("Video not found");
+  }
+  if (record.isDeleted) return;
+  const next = current.map((r) =>
+    r.id === id ? { ...r, isDeleted: true } : r,
+  );
+  await writeFile(indexPath, JSON.stringify(next, null, 2), "utf8");
 }
