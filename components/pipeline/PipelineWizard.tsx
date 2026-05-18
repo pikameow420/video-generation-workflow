@@ -22,6 +22,7 @@ import { VideoStep } from "@/components/pipeline/steps/VideoStep";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import {
+  createEmptyWizardSnapshot,
   dedupeReferenceUrls,
   fileToDataUrl,
   MAX_MANUAL_SCRIPT_FILE_BYTES,
@@ -35,6 +36,7 @@ import { usePipelineLibraryApi } from "@/hooks/usePipelineLibraryApi";
 import { usePipelineVideoProvider } from "@/hooks/usePipelineVideoProvider";
 import { useWizardSubtitleActions } from "@/hooks/useWizardSubtitleActions";
 import { useWizardPendingVideoJob } from "@/hooks/useWizardPendingVideoJob";
+import { usePipelineVideoStored } from "@/hooks/usePipelineVideoStored";
 import { useWizardLocalStorage } from "@/hooks/useWizardLocalStorage";
 import {
   characterSheetResponseSchema,
@@ -178,6 +180,12 @@ export function PipelineWizard() {
     setVideoHasCaptions,
     setVideoUrl,
   });
+
+  const videoStoredInLibrary = usePipelineVideoStored(
+    videoMeta?.predictionId,
+    Boolean(videoUrl && videoMeta?.predictionId),
+    videoHasCaptions ? "captioned" : "raw",
+  );
 
   const selectedScript = scripts?.find((script) => script.id === selectedId) ?? null;
   const currentBatchPrimaryScript = scripts?.[0] ?? null;
@@ -589,6 +597,38 @@ export function PipelineWizard() {
     trackSheetScriptSelection,
   ]);
   
+  const onStartNewRun = useCallback(() => {
+    const hasInFlightJob =
+      pendingVideoJob !== null ||
+      videoGenerationBusy ||
+      (busy && step === "video" && !videoUrl);
+
+    if (hasInFlightJob) {
+      const ok = window.confirm(
+        "A video is still generating or processing. Start a new run anyway? This job will no longer be tracked in the wizard.",
+      );
+      if (!ok) return;
+    }
+
+    restoreSnapshot(createEmptyWizardSnapshot());
+    clearMuapiAudio();
+    setBusy(false);
+    setVideoGenerationBusy(false);
+    setExpandedHistoryId(null);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(WIZARD_STORAGE_KEY);
+    }
+    toast.success("Ready for a new video.");
+  }, [
+    busy,
+    clearMuapiAudio,
+    pendingVideoJob,
+    restoreSnapshot,
+    step,
+    videoGenerationBusy,
+    videoUrl,
+  ]);
+
   const onClearMuapiAudio = useCallback(() => {
     setMuapiAudioDataUrls([]);
     setMuapiAudioFileNames([]);
@@ -921,8 +961,10 @@ export function PipelineWizard() {
           subtitleVideoDurationSec={subtitleVideoDurationSec}
           videoHasCaptions={videoHasCaptions}
           videoMeta={videoMeta}
+          videoStoredInLibrary={videoStoredInLibrary}
           onStartVideo={() => void startVideo()}
           onGoTopic={() => setStep("topic")}
+          onStartNewRun={onStartNewRun}
           onGenerateSubtitles={() => void generateSubtitles()}
           onBurnSubtitles={() => void burnSubtitles()}
           onSubtitleLanguageChange={setSubtitleLanguage}

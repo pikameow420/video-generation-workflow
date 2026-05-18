@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -19,8 +21,10 @@ type VideoStepProps = {
   subtitleVideoDurationSec: number | null;
   videoHasCaptions: boolean;
   videoMeta: { predictionId: string } | null;
+  videoStoredInLibrary: boolean;
   onStartVideo: () => void;
   onGoTopic: () => void;
+  onStartNewRun: () => void;
   onGenerateSubtitles: () => void;
   onBurnSubtitles: () => void;
   onSubtitleLanguageChange: (next: SubtitleLanguage) => void;
@@ -39,8 +43,10 @@ export function VideoStep({
   subtitleVideoDurationSec,
   videoHasCaptions,
   videoMeta,
+  videoStoredInLibrary,
   onStartVideo,
   onGoTopic,
+  onStartNewRun,
   onGenerateSubtitles,
   onBurnSubtitles,
   onSubtitleLanguageChange,
@@ -119,6 +125,26 @@ export function VideoStep({
                     Job {videoMeta.predictionId.slice(0, 8)}…
                   </span>
                 ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                {videoStoredInLibrary ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full"
+                    asChild
+                  >
+                    <Link href="/library">View in library</Link>
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={onStartNewRun}
+                >
+                  Start new video
+                </Button>
               </div>
             </div>
 
