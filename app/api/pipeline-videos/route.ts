@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { listPipelineVideosPage, softDeletePipelineVideo } from "@/lib/uploads/pipeline-video-store";
+import {
+  getPipelineVideoRecord,
+  listPipelineVideosPage,
+  softDeletePipelineVideo,
+} from "@/lib/uploads/pipeline-video-store";
 import { isSupabasePersistenceEnabled } from "@/lib/persistence/backend";
 
 export const runtime = "nodejs";
@@ -10,6 +14,19 @@ const MAX_LIMIT = 100;
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
+    const predictionId = url.searchParams.get("predictionId")?.trim();
+    if (predictionId) {
+      const record = await getPipelineVideoRecord(predictionId);
+      if (!record || record.isDeleted) {
+        return NextResponse.json({ found: false as const });
+      }
+      return NextResponse.json({
+        found: true as const,
+        id: record.id,
+        hasCaptions: record.hasCaptions,
+      });
+    }
+
     const limitRaw = url.searchParams.get("limit");
     const offsetRaw = url.searchParams.get("offset");
     const limit = Math.min(
