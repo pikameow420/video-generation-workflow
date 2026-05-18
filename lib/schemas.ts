@@ -129,6 +129,12 @@ export const pipelineVideoListResponseSchema = z.object({
   persistence: z.enum(["supabase", "none"]),
 });
 
+export const pipelineVideoLookupResponseSchema = z.object({
+  found: z.boolean(),
+  id: z.string().optional(),
+  hasCaptions: z.boolean().optional(),
+});
+
 export const referenceImageSchema = z.object({
   id: z.string(),
   url: z.string().min(1),
