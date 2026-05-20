@@ -4,6 +4,7 @@ import type {
   ScriptMode,
   ScriptOption,
   Step,
+  WizardSnapshot,
 } from "@/components/pipeline/types";
 import type { VideoProvider } from "@/lib/schemas";
 
@@ -11,6 +12,40 @@ export const WIZARD_STORAGE_KEY = "video-pipeline-wizard-state-v1";
 export const MAX_MANUAL_SCRIPT_FILE_BYTES = 256 * 1024;
 export const MAX_REFERENCE_IMAGES = 9;
 export const VIDEO_PROVIDER_STORAGE_KEY = "pipeline-video-provider";
+
+/** Default wizard state for a fresh pipeline run. */
+export function createEmptyWizardSnapshot(): WizardSnapshot {
+  return {
+    isScriptSidebarOpen: true,
+    step: "topic",
+    topic: "",
+    tone: "",
+    audience: "",
+    notes: "",
+    basePrompt: "",
+    brandKit: "",
+    scriptMode: "generate",
+    saveManualScript: true,
+    manualScriptSource: "manual",
+    scripts: null,
+    selectedId: null,
+    scriptEdit: { title: "", body: "" },
+    artDirection: "",
+    sheetUrl: null,
+    sheetSource: "generated",
+    selectedReferenceUrls: [],
+    sheetScriptHistory: [],
+    videoUrl: null,
+    videoMeta: null,
+    videoStatus: "",
+    subtitleLanguage: "auto",
+    subtitleVideoDurationSec: null,
+    subtitleSrt: "",
+    subtitleChars: null,
+    videoHasCaptions: false,
+    pendingVideoJob: null,
+  };
+}
 
 export type WizardStepMeta = {
   id: Step;
