@@ -14,6 +14,7 @@ import type {
   SubtitleLanguage,
   WizardSnapshot,
 } from "@/components/pipeline/types";
+import { PipelineStepper } from "@/components/pipeline/PipelineStepper";
 import { WizardSummaryCard } from "@/components/pipeline/WizardSummaryCard";
 import { ScriptsStep } from "@/components/pipeline/steps/ScriptsStep";
 import { SheetStep } from "@/components/pipeline/steps/SheetStep";
@@ -25,6 +26,7 @@ import {
   createEmptyWizardSnapshot,
   dedupeReferenceUrls,
   fileToDataUrl,
+  getWizardStepStates,
   MAX_MANUAL_SCRIPT_FILE_BYTES,
   normalizeReferenceUrl,
   WIZARD_STORAGE_KEY,
@@ -193,6 +195,59 @@ export function PipelineWizard() {
   const isScriptsDone = step === "sheet" || step === "video";
   const isSheetDone = step === "video";
 
+  const stepStates = useMemo(
+    () =>
+      getWizardStepStates({
+        currentStep: step,
+        scriptMode,
+        topic,
+        scriptEdit,
+        scripts,
+        sheetUrl,
+        videoUrl,
+      }),
+    [scriptEdit, scripts, sheetUrl, step, scriptMode, topic, videoUrl],
+  );
+
+  const navigateToStep = useCallback(
+    (next: Step) => {
+      if (next === step) return;
+      if (!stepStates[next].accessible) return;
+
+      if (busy) {
+        toast.message("Wait for the current request before changing steps.");
+        return;
+      }
+
+      if (
+        step === "video" &&
+        next !== "video" &&
+        (pendingVideoJob !== null || videoGenerationBusy)
+      ) {
+        const ok = window.confirm(
+          "A video is still generating or processing. Leave this step? You can come back via the Video step.",
+        );
+        if (!ok) return;
+      }
+
+      setStep(next);
+      setError(null);
+      if (next === "scripts") {
+        void loadReferenceImages();
+        void loadSavedScripts();
+      }
+    },
+    [
+      busy,
+      loadReferenceImages,
+      loadSavedScripts,
+      pendingVideoJob,
+      step,
+      stepStates,
+      videoGenerationBusy,
+    ],
+  );
+
   const snapshot = useMemo<WizardSnapshot>(
     () => ({
       isScriptSidebarOpen,
@@ -320,13 +375,6 @@ export function PipelineWizard() {
     restore: restoreSnapshot,
     snapshot,
   });
-
-  const goScripts = useCallback(() => {
-    setStep("scripts");
-    setError(null);
-    void loadReferenceImages();
-    void loadSavedScripts();
-  }, [loadReferenceImages, loadSavedScripts]);
 
   const onPickScript = useCallback(
     (id: string) => {
@@ -826,16 +874,25 @@ export function PipelineWizard() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-10 sm:px-6 lg:pr-[380px]">
-      <header className="mb-2 space-y-2">
-        <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-          Script · Character Sheet · Seedance (
-          {videoProvider === "muapi" ? "MuAPI" : "Atlas Cloud"})
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-          Video Pipeline
-        </h1>
-      </header>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-10 sm:px-6 xl:pl-8 lg:flex lg:flex-row lg:gap-8 lg:pr-[380px]">
+      <PipelineStepper
+        variant="vertical"
+        currentStep={step}
+        stepStates={stepStates}
+        busy={busy}
+        onStepSelect={navigateToStep}
+        className="hidden self-start lg:flex lg:sticky lg:top-24 lg:w-[200px] shrink-0 xl:w-[216px]"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-5">
+        <PipelineStepper
+          variant="horizontal"
+          currentStep={step}
+          stepStates={stepStates}
+          busy={busy}
+          onStepSelect={navigateToStep}
+          className="lg:hidden"
+        />
+
 
       {error ? (
         <Alert
@@ -885,7 +942,7 @@ export function PipelineWizard() {
           detail={
             scriptMode === "manual" ? scriptEdit.title || "Custom script entry" : topic
           }
-          onEdit={() => setStep("topic")}
+          onEdit={() => navigateToStep("topic")}
         />
       )}
 
@@ -916,7 +973,7 @@ export function PipelineWizard() {
         <WizardSummaryCard
           title="Script Selected"
           detail={scriptEdit.title || "Untitled script"}
-          onEdit={goScripts}
+          onEdit={() => navigateToStep("scripts")}
         />
       ) : null}
 
@@ -937,7 +994,9 @@ export function PipelineWizard() {
           onClearMuapiAudio={onClearMuapiAudio}
           onStartVideo={() => void startVideo()}
           onRegenerate={() =>
-            sheetSource === "uploaded" ? setStep("scripts") : void generateSheet()
+            sheetSource === "uploaded"
+              ? navigateToStep("scripts")
+              : void generateSheet()
           }
         />
       ) : isSheetDone && sheetUrl ? (
@@ -945,7 +1004,7 @@ export function PipelineWizard() {
           title="Character Sheet Generated"
           detail="Ready for video generation"
           thumbnailUrl={sheetUrl}
-          onEdit={() => setStep("sheet")}
+          onEdit={() => navigateToStep("sheet")}
         />
       ) : null}
 
@@ -963,8 +1022,7 @@ export function PipelineWizard() {
           videoMeta={videoMeta}
           videoStoredInLibrary={videoStoredInLibrary}
           onStartVideo={() => void startVideo()}
-          onGoTopic={() => setStep("topic")}
-          onStartNewRun={onStartNewRun}
+          onGoTopic={() => navigateToStep("topic")}
           onGenerateSubtitles={() => void generateSubtitles()}
           onBurnSubtitles={() => void burnSubtitles()}
           onSubtitleLanguageChange={setSubtitleLanguage}
@@ -985,11 +1043,12 @@ export function PipelineWizard() {
         onRefresh={() => void loadSavedScripts()}
         onPickCurrentBatchScript={(id) => {
           onPickScript(id);
-          setStep("scripts");
+          navigateToStep("scripts");
         }}
         onApplyHistoryScript={applyScriptFromHistory}
         onExpandedHistoryIdChange={setExpandedHistoryId}
       />
+      </div>
     </div>
   );
 }
