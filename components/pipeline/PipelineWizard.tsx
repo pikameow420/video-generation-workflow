@@ -1022,6 +1022,7 @@ export function PipelineWizard() {
           videoMeta={videoMeta}
           videoStoredInLibrary={videoStoredInLibrary}
           onStartVideo={() => void startVideo()}
+          onStartNewRun={onStartNewRun}
           onGoTopic={() => navigateToStep("topic")}
           onGenerateSubtitles={() => void generateSubtitles()}
           onBurnSubtitles={() => void burnSubtitles()}
