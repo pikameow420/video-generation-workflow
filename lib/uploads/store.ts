@@ -134,6 +134,7 @@ function asIso(ts: unknown): string {
 
 async function putReferenceImageSupabase(
   input: PutReferenceImageInput,
+  userId: string,
 ): Promise<ReferenceImageRecord> {
   const env = getEnv();
   const admin = createAdminClient();
@@ -159,6 +160,7 @@ async function putReferenceImageSupabase(
     bytes: input.bytes.byteLength,
     original_name: input.originalName,
     created_at: createdAt,
+    user_id: userId,
   });
   if (error) {
     throw new Error(`reference_images insert failed: ${error.message}`);
@@ -180,7 +182,7 @@ async function putReferenceImageSupabase(
   };
 }
 
-async function listReferenceImagesSupabase(): Promise<ReferenceImageRecord[]> {
+async function listReferenceImagesSupabase(userId: string): Promise<ReferenceImageRecord[]> {
   const env = getEnv();
   const admin = createAdminClient();
   const bucket = env.SUPABASE_REFERENCE_IMAGES_BUCKET;
@@ -188,7 +190,8 @@ async function listReferenceImagesSupabase(): Promise<ReferenceImageRecord[]> {
   const { data, error } = await admin
     .from("reference_images")
     .select("*")
-    .order("created_at", { ascending: false });
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false});
   if (error) {
     throw new Error(`reference_images list failed: ${error.message}`);
   }
@@ -211,7 +214,7 @@ async function listReferenceImagesSupabase(): Promise<ReferenceImageRecord[]> {
   return out;
 }
 
-async function deleteReferenceImageSupabase(id: string): Promise<void> {
+async function deleteReferenceImageSupabase(id: string, userId: string): Promise<void> {
   const env = getEnv();
   const admin = createAdminClient();
   const bucket = env.SUPABASE_REFERENCE_IMAGES_BUCKET;
@@ -220,6 +223,7 @@ async function deleteReferenceImageSupabase(id: string): Promise<void> {
     .from("reference_images")
     .select("storage_path")
     .eq("id", id)
+    .eq("user_id", userId)
     .maybeSingle();
   if (selErr) {
     throw new Error(`reference_images read failed: ${selErr.message}`);
@@ -238,7 +242,7 @@ async function deleteReferenceImageSupabase(id: string): Promise<void> {
     /* tolerate missing blob */
   }
 
-  const { error: delErr } = await admin.from("reference_images").delete().eq("id", id);
+  const { error: delErr } = await admin.from("reference_images").delete().eq("id", id).eq("user_id", userId);
   if (delErr) {
     throw new Error(`reference_images delete failed: ${delErr.message}`);
   }
@@ -246,9 +250,13 @@ async function deleteReferenceImageSupabase(id: string): Promise<void> {
 
 export async function putReferenceImage(
   input: PutReferenceImageInput,
+  userId?: string,
 ): Promise<ReferenceImageRecord> {
   if (isSupabasePersistenceEnabled()) {
-    return putReferenceImageSupabase(input);
+    if (!userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
+    return putReferenceImageSupabase(input, userId);
   }
 
   const env = getEnv();
@@ -258,9 +266,12 @@ export async function putReferenceImage(
   return putLocalReferenceImage(input);
 }
 
-export async function listReferenceImages(): Promise<ReferenceImageRecord[]> {
+export async function listReferenceImages(userId?: string): Promise<ReferenceImageRecord[]> {
   if (isSupabasePersistenceEnabled()) {
-    return listReferenceImagesSupabase();
+    if (!userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
+    return listReferenceImagesSupabase(userId);
   }
 
   const env = getEnv();
@@ -291,9 +302,12 @@ export class ReferenceImageNotFoundError extends Error {
   }
 }
 
-export async function deleteReferenceImage(id: string): Promise<void> {
+export async function deleteReferenceImage(id: string, userId?: string): Promise<void> {
   if (isSupabasePersistenceEnabled()) {
-    return deleteReferenceImageSupabase(id);
+    if (!userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
+    return deleteReferenceImageSupabase(id, userId);
   }
 
   const env = getEnv();

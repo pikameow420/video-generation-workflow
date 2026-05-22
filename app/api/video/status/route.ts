@@ -3,6 +3,8 @@ import { ZodError } from "zod";
 import { pollAtlasVideoOnce } from "@/lib/seedance/client";
 import { pollMuapiVideoOnce } from "@/lib/muapi/client";
 import { videoStatusQuerySchema } from "@/lib/schemas";
+import { requireUser } from "@/lib/auth/require-user";
+import { verifyPredictionOwnership } from "@/lib/auth/prediction-ownership";
 import {
   getPipelineVideoRecord,
   ingestRemotePipelineVideo,
@@ -13,6 +15,9 @@ export const maxDuration = 120;
 
 export async function GET(req: Request) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const url = new URL(req.url);
     const query = videoStatusQuerySchema.parse({
       predictionId: url.searchParams.get("predictionId"),
@@ -20,7 +25,15 @@ export async function GET(req: Request) {
       title: url.searchParams.get("title"),
     });
 
-    const existing = await getPipelineVideoRecord(query.predictionId);
+    const isOwner = await verifyPredictionOwnership(query.predictionId, auth.user.id);
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: "Forbidden" },
+        { status: 403 }
+      );
+    }
+
+    const existing = await getPipelineVideoRecord(query.predictionId, auth.user.id);
     if (existing?.url) {
       return NextResponse.json({
         status: "completed" as const,
@@ -54,6 +67,7 @@ export async function GET(req: Request) {
       sourceUrl: outcome.videoUrl,
       predictionId: query.predictionId,
       title: query.title,
+      userId: auth.user.id,
     });
 
     return NextResponse.json({

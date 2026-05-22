@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { LibraryVideoCard } from "@/components/library/LibraryVideoCard";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { getSessionUser } from "@/lib/auth/session-user";
 import { isSupabasePersistenceEnabled } from "@/lib/persistence/backend";
 import { listPipelineVideosPage } from "@/lib/uploads/pipeline-video-store";
 
@@ -33,10 +35,16 @@ export default async function LibraryPage({
   const sp = await searchParams;
   const offset = Math.max(0, Number.parseInt(sp.offset ?? "0", 10) || 0);
 
+  const user = await getSessionUser();
+  if (!user) {
+    redirect("/login?next=/library");
+  }
+
   const persistence = isSupabasePersistenceEnabled() ? "supabase" : "none";
   const { items, total } = await listPipelineVideosPage({
     limit: PAGE_SIZE,
     offset,
+    userId: user.id,
   });
 
   const canPrev = offset > 0;

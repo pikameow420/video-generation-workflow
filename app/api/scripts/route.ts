@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { scriptsRequestSchema, scriptsResponseSchema } from "@/lib/schemas";
 import { getEnv } from "@/lib/env";
+import { requireUser } from "@/lib/auth/require-user";
 import {
   buildScriptSystemMessage,
   buildScriptUserMessage,
@@ -32,6 +33,9 @@ function extractJsonObject(text: string): unknown {
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const env = getEnv();
     const apiKey = env.ATLASCLOUD_API_KEY;
     if (!apiKey?.trim()) {
@@ -43,7 +47,6 @@ export async function POST(req: Request) {
 
     const json = await req.json();
     const input = scriptsRequestSchema.parse(json);
-    // TODO: Add auth checks before allowing team users to generate or reuse scripts.
 
     const userLines = buildScriptUserMessage(input);
     const systemMessage = buildScriptSystemMessage(

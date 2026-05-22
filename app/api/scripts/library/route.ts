@@ -5,12 +5,16 @@ import {
   savedScriptListResponseSchema,
 } from "@/lib/schemas";
 import { listSavedScripts, putSavedScript } from "@/lib/scripts/store";
+import { requireUser } from "@/lib/auth/require-user";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const items = await listSavedScripts();
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
+    const items = await listSavedScripts(auth.user.id);
     const validated = savedScriptListResponseSchema.parse({ items });
     return NextResponse.json(validated);
   } catch (err) {
@@ -22,13 +26,16 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const json = await req.json();
     const body = saveScriptRequestSchema.parse(json);
     const item = await putSavedScript({
       title: body.title,
       body: body.body,
       source: body.source ?? "manual",
-    });
+    }, auth.user.id);
     return NextResponse.json(item, { status: 201 });
   } catch (err) {
     if (err instanceof ZodError) {

@@ -11,6 +11,7 @@ import {
   putReferenceImage,
   ReferenceImageNotFoundError,
 } from "@/lib/uploads/store";
+import { requireUser } from "@/lib/auth/require-user";
 
 const deleteQuerySchema = z.object({
   id: z.uuid(),
@@ -31,7 +32,10 @@ function parseErrorMessage(err: unknown, fallback: string): string {
 
 export async function GET() {
   try {
-    const items = await listReferenceImages();
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
+    const items = await listReferenceImages(auth.user.id);
     const validated = referenceImageListResponseSchema.parse({ items });
     return NextResponse.json(validated);
   } catch (err) {
@@ -44,6 +48,9 @@ export async function GET() {
 
 export async function DELETE(req: Request) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const url = new URL(req.url);
     const parsed = deleteQuerySchema.safeParse({
       id: url.searchParams.get("id"),
@@ -55,7 +62,7 @@ export async function DELETE(req: Request) {
       );
     }
 
-    await deleteReferenceImage(parsed.data.id);
+    await deleteReferenceImage(parsed.data.id, auth.user.id);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     if (err instanceof ReferenceImageNotFoundError) {
@@ -70,6 +77,9 @@ export async function DELETE(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const form = await req.formData();
     const entry = form.get("file");
     if (!(entry instanceof File)) {
@@ -103,7 +113,7 @@ export async function POST(req: Request) {
       bytes: data,
       mimeType: entry.type,
       originalName: entry.name || "reference-image",
-    });
+    }, auth.user.id);
     return NextResponse.json(saved, { status: 201 });
   } catch (err) {
     const message = parseErrorMessage(err, "Failed to upload reference image");

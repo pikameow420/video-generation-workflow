@@ -65,6 +65,7 @@ function asIso(ts: unknown): string {
 
 async function putSavedScriptSupabase(
   input: PutSavedScriptInput,
+  userId: string,
 ): Promise<SavedScriptRecord> {
   const admin = createAdminClient();
   const id = randomUUID();
@@ -75,6 +76,7 @@ async function putSavedScriptSupabase(
     body: input.body.trim(),
     source: input.source,
     created_at: createdAt,
+    user_id: userId,
   });
   if (error) {
     throw new Error(`saved_scripts insert failed: ${error.message}`);
@@ -90,11 +92,12 @@ async function putSavedScriptSupabase(
   return record;
 }
 
-async function listSavedScriptsSupabase(): Promise<SavedScriptRecord[]> {
+async function listSavedScriptsSupabase(userId: string): Promise<SavedScriptRecord[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("saved_scripts")
     .select("*")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) {
     throw new Error(`saved_scripts list failed: ${error.message}`);
@@ -114,9 +117,13 @@ async function listSavedScriptsSupabase(): Promise<SavedScriptRecord[]> {
 
 export async function putSavedScript(
   input: PutSavedScriptInput,
+  userId?: string,
 ): Promise<SavedScriptRecord> {
   if (isSupabasePersistenceEnabled()) {
-    return putSavedScriptSupabase(input);
+    if (!userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
+    return putSavedScriptSupabase(input, userId);
   }
 
   const record = savedScriptSchema.parse({
@@ -130,9 +137,12 @@ export async function putSavedScript(
   return record;
 }
 
-export async function listSavedScripts(): Promise<SavedScriptRecord[]> {
+export async function listSavedScripts(userId?: string): Promise<SavedScriptRecord[]> {
   if (isSupabasePersistenceEnabled()) {
-    return listSavedScriptsSupabase();
+    if (!userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
+    return listSavedScriptsSupabase(userId);
   }
 
   const env = getEnv();

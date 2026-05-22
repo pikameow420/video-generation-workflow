@@ -13,6 +13,8 @@ import {
 } from "@/lib/subtitles/style";
 import { resolveSubtitleVideoUrl } from "@/lib/subtitles/resolve-video-url";
 import { putPipelineVideo } from "@/lib/uploads/pipeline-video-store";
+import { requireUser } from "@/lib/auth/require-user";
+import { verifyPredictionOwnership } from "@/lib/auth/prediction-ownership";
 
 const execFileAsync = promisify(execFile);
 
@@ -48,8 +50,20 @@ export async function POST(req: Request) {
   const outputPath = `${tmpPrefix}-out.mp4`;
 
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const json = await req.json();
     const body = burnSubtitlesRequestSchema.parse(json);
+    
+    const isOwner = await verifyPredictionOwnership(body.predictionId, auth.user.id);
+    if (!isOwner) {
+      return NextResponse.json(
+        { error: "Forbidden" },
+        { status: 403 }
+      );
+    }
+
     const resolvedVideoUrl = resolveSubtitleVideoUrl(body.videoUrl, req.url);
     await ensureFfmpegExists();
     await ensureSubtitleFilterExists();
@@ -90,6 +104,7 @@ export async function POST(req: Request) {
       predictionId: body.predictionId,
       hasCaptions: true,
       title: body.title,
+      userId: auth.user.id,
     });
 
     return NextResponse.json({ videoUrl: saved.url, hasCaptions: true as const });

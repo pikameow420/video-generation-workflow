@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { AuthHeaderActions } from "@/components/auth/AuthHeaderActions";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -57,6 +58,7 @@ export default function RootLayout({
                 >
                   Library
                 </Link>
+                <AuthHeaderActions />
               </nav>
             </div>
           </header>

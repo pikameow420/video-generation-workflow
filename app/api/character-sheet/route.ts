@@ -3,12 +3,16 @@ import { ZodError } from "zod";
 import { characterSheetRequestSchema } from "@/lib/schemas";
 import { generateCharacterSheetWithOpenAI } from "@/lib/openai/images";
 import { buildCharacterSheetPrompt } from "@/lib/prompts/character-sheet";
+import { requireUser } from "@/lib/auth/require-user";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const json = await req.json();
     const input = characterSheetRequestSchema.parse(json);
     const normalizedRefUrls = (input.referenceImageUrls ?? []).map((url) =>

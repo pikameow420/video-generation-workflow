@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { maxMuapiAudioBytesPerFile, videoRequestSchema, type VideoProvider } from "@/lib/schemas";
 import { getEnv } from "@/lib/env";
+import { requireUser } from "@/lib/auth/require-user";
+import { trackPrediction } from "@/lib/auth/prediction-ownership";
 import { parseMuapiAudioDataUrl } from "@/lib/muapi/audio-data-url";
 import { startMuapiVideoJob, uploadMuapiFile } from "@/lib/muapi/client";
 import {
@@ -259,6 +261,9 @@ async function assetizeImageUrls(imageUrls: string[]): Promise<string[]> {
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const json = await req.json();
     const body = videoRequestSchema.parse(json);
     const env = getEnv();
@@ -346,6 +351,7 @@ export async function POST(req: Request) {
         imageUrls,
         audioUrls: audioUrls.length ? audioUrls : undefined,
       });
+      await trackPrediction(predictionId, auth.user.id, "muapi");
       return NextResponse.json({
         predictionId,
         status: "processing" as const,
@@ -377,6 +383,7 @@ export async function POST(req: Request) {
       });
     }
 
+    await trackPrediction(predictionId, auth.user.id, "atlas");
     return NextResponse.json({
       predictionId,
       status: "processing" as const,

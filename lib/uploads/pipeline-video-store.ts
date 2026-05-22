@@ -109,6 +109,7 @@ async function putPipelineVideoSupabase(input: {
   bytes: Uint8Array;
   predictionId: string;
   hasCaptions: boolean;
+  userId: string;
   /** Set or clear display title; omit to keep existing row title. */
   title?: string | undefined;
 }): Promise<PipelineVideoRecord> {
@@ -151,6 +152,7 @@ async function putPipelineVideoSupabase(input: {
       created_at: createdAt,
       updated_at: now,
       is_deleted: false,
+      user_id: input.userId,
     },
     { onConflict: "id" },
   );
@@ -177,6 +179,7 @@ async function putPipelineVideoSupabase(input: {
 
 async function getPipelineVideoRecordSupabase(
   predictionId: string,
+  userId: string,
 ): Promise<PipelineVideoRecord | null> {
   const env = getEnv();
   const id = predictionId.trim();
@@ -187,6 +190,7 @@ async function getPipelineVideoRecordSupabase(
     .from("pipeline_videos")
     .select("*")
     .eq("id", id)
+    .eq("user_id", userId)
     .eq("is_deleted", false)
     .maybeSingle();
   if (error) {
@@ -220,6 +224,7 @@ export async function putPipelineVideo(input: {
   bytes: Uint8Array;
   predictionId: string;
   hasCaptions: boolean;
+  userId?: string;
   title?: string | undefined;
 }): Promise<PipelineVideoRecord> {
   const id = input.predictionId.trim();
@@ -228,7 +233,10 @@ export async function putPipelineVideo(input: {
   }
 
   if (isSupabasePersistenceEnabled()) {
-    return putPipelineVideoSupabase(input);
+    if (!input.userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
+    return putPipelineVideoSupabase({ ...input, userId: input.userId });
   }
 
   const indexPath = path.resolve(
@@ -260,9 +268,13 @@ export async function putPipelineVideo(input: {
 
 export async function getPipelineVideoRecord(
   predictionId: string,
+  userId?: string,
 ): Promise<PipelineVideoRecord | null> {
   if (isSupabasePersistenceEnabled()) {
-    return getPipelineVideoRecordSupabase(predictionId);
+    if (!userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
+    return getPipelineVideoRecordSupabase(predictionId, userId);
   }
 
   const id = predictionId.trim();
@@ -293,9 +305,14 @@ export type PipelineVideoListRow = {
 export async function listPipelineVideosPage(input: {
   limit: number;
   offset: number;
+  userId?: string;
 }): Promise<{ items: PipelineVideoListRow[]; total: number }> {
   if (!isSupabasePersistenceEnabled()) {
     return { items: [], total: 0 };
+  }
+
+  if (!input.userId) {
+    throw new Error("userId required when Supabase persistence is enabled");
   }
 
   const env = getEnv();
@@ -305,6 +322,7 @@ export async function listPipelineVideosPage(input: {
   const { count, error: countError } = await admin
     .from("pipeline_videos")
     .select("id", { count: "exact", head: true })
+    .eq("user_id", input.userId)
     .eq("is_deleted", false);
 
   if (countError) {
@@ -317,6 +335,7 @@ export async function listPipelineVideosPage(input: {
     .select(
       "id, storage_path, bytes, has_captions, created_at, updated_at, title",
     )
+    .eq("user_id", input.userId)
     .eq("is_deleted", false)
     .order("updated_at", { ascending: false })
     .range(input.offset, input.offset + input.limit - 1);
@@ -357,6 +376,7 @@ export async function listPipelineVideosPage(input: {
 export async function ingestRemotePipelineVideo(input: {
   sourceUrl: string;
   predictionId: string;
+  userId?: string;
   title?: string;
 }): Promise<PipelineVideoRecord> {
   const res = await fetch(input.sourceUrl);
@@ -369,21 +389,26 @@ export async function ingestRemotePipelineVideo(input: {
     predictionId: input.predictionId,
     hasCaptions: false,
     title: input.title,
+    userId: input.userId,
   });
 }
 
 /** Soft-delete: keep row and storage object; hide from library / status shortcuts. */
-export async function softDeletePipelineVideo(predictionId: string): Promise<void> {
+export async function softDeletePipelineVideo(predictionId: string, userId?: string): Promise<void> {
   const id = predictionId.trim();
   if (!id) throw new Error("predictionId is required");
 
   if (isSupabasePersistenceEnabled()) {
+    if (!userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
     const admin = createAdminClient();
     const now = new Date().toISOString();
     const { data, error } = await admin
       .from("pipeline_videos")
       .update({ is_deleted: true, updated_at: now })
       .eq("id", id)
+      .eq("user_id", userId)
       .eq("is_deleted", false)
       .select("id");
     if (error) {
@@ -394,6 +419,7 @@ export async function softDeletePipelineVideo(predictionId: string): Promise<voi
         .from("pipeline_videos")
         .select("id, is_deleted")
         .eq("id", id)
+        .eq("user_id", userId)
         .maybeSingle();
       if (row && (row as { is_deleted?: boolean }).is_deleted === true) {
         return;

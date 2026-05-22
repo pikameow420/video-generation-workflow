@@ -9,6 +9,7 @@ import { buildCuesFromPipelineScript } from "@/lib/subtitles/from-script";
 import { toSrt } from "@/lib/subtitles/format";
 import { resolveSubtitleVideoUrl } from "@/lib/subtitles/resolve-video-url";
 import { transcribeVideoFromUrl } from "@/lib/subtitles/transcribe";
+import { requireUser } from "@/lib/auth/require-user";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -41,6 +42,9 @@ function resolveSubtitleLanguageConfig(
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
     const json = await req.json();
     const body = transcribeSubtitlesRequestSchema.parse(json);
     const env = getEnv();

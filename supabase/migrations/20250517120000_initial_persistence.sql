@@ -1,5 +1,5 @@
 -- Persisted entities (no permissive anon/authenticated access; API uses service_role).
-create table public.saved_scripts (
+create table if not exists public.saved_scripts (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   body text not null,
@@ -8,7 +8,7 @@ create table public.saved_scripts (
   user_id uuid references auth.users (id) on delete set null
 );
 
-create index saved_scripts_created_at_idx on public.saved_scripts (created_at desc);
+create index if not exists saved_scripts_created_at_idx on public.saved_scripts (created_at desc);
 
 alter table public.saved_scripts enable row level security;
 
@@ -16,7 +16,7 @@ revoke all on table public.saved_scripts from anon;
 revoke all on table public.saved_scripts from authenticated;
 
 
-create table public.reference_images (
+create table if not exists public.reference_images (
   id uuid primary key,
   storage_path text not null unique,
   mime_type text not null,
@@ -26,7 +26,7 @@ create table public.reference_images (
   user_id uuid references auth.users (id) on delete set null
 );
 
-create index reference_images_created_at_idx on public.reference_images (created_at desc);
+create index if not exists reference_images_created_at_idx on public.reference_images (created_at desc);
 
 alter table public.reference_images enable row level security;
 
@@ -34,7 +34,7 @@ revoke all on table public.reference_images from anon;
 revoke all on table public.reference_images from authenticated;
 
 
-create table public.pipeline_videos (
+create table if not exists public.pipeline_videos (
   id text primary key,
   storage_path text not null unique,
   bytes bigint not null,
@@ -44,7 +44,7 @@ create table public.pipeline_videos (
   user_id uuid references auth.users (id) on delete set null
 );
 
-create index pipeline_videos_updated_at_idx on public.pipeline_videos (updated_at desc);
+create index if not exists pipeline_videos_updated_at_idx on public.pipeline_videos (updated_at desc);
 
 alter table public.pipeline_videos enable row level security;
 

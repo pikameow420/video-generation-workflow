@@ -40,6 +40,7 @@ import { useWizardSubtitleActions } from "@/hooks/useWizardSubtitleActions";
 import { useWizardPendingVideoJob } from "@/hooks/useWizardPendingVideoJob";
 import { usePipelineVideoStored } from "@/hooks/usePipelineVideoStored";
 import { useWizardLocalStorage } from "@/hooks/useWizardLocalStorage";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
 import {
   characterSheetResponseSchema,
   referenceImageSchema,
@@ -110,6 +111,15 @@ export function PipelineWizard() {
   const [muapiAudioFileNames, setMuapiAudioFileNames] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useAuthGuard(useCallback(() => {
+    if (pendingVideoJob !== null) {
+      setPendingVideoJob(null);
+      setVideoStatus("");
+      setVideoGenerationBusy(false);
+      toast.info("User changed - video generation job cleared");
+    }
+  }, [pendingVideoJob]));
 
   const {
     presets,
