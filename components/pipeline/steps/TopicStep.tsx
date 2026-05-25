@@ -420,7 +420,7 @@ export function TopicStep({
                   <Spinner className="mr-2 h-4 w-4" /> Continuing...
                 </>
               ) : (
-                "Continue to Character Sheet"
+                "Continue to Script Review"
               )}
             </Button>
           </div>

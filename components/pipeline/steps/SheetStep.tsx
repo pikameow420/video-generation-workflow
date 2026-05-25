@@ -21,6 +21,8 @@ type SheetStepProps = {
   videoGenerationBusy: boolean;
   /** MuAPI Omni: optional voice reference audio (shown only for 720p). */
   muapiAudioFileNames: string[];
+  /** Set when the selected Character Profile's voice sample will be auto-attached as @audio1. */
+  profileVoiceName: string | null;
   onMuapiAudioFilesChange: (e: ChangeEvent<HTMLInputElement>) => void;
   onClearMuapiAudio: () => void;
   onStartVideo: () => void;
@@ -39,6 +41,7 @@ export function SheetStep({
   canStartVideo,
   videoGenerationBusy = false,
   muapiAudioFileNames,
+  profileVoiceName,
   onMuapiAudioFilesChange,
   onClearMuapiAudio,
   onStartVideo,
@@ -49,9 +52,9 @@ export function SheetStep({
       <CardHeader>
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
-            3
+            4
           </div>
-          <CardTitle className="text-xl">Review Character Sheet</CardTitle>
+          <CardTitle className="text-xl">Review Frame Sequence Sheet</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="space-y-5 pb-6">
@@ -59,7 +62,7 @@ export function SheetStep({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={sheetUrl}
-            alt="Character sheet reference"
+            alt="Frame sequence sheet reference"
             className="max-h-[400px] w-full object-contain"
           />
         </div>
@@ -132,11 +135,20 @@ export function SheetStep({
             <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">
               Voice reference (optional)
             </p>
-            <p className="text-xs text-zinc-500">
-              Upload up to 3 clips. The prompt uses{" "}
-              <span className="font-mono text-zinc-700 dark:text-zinc-300">@audio1</span>{" "}
-              as the voice reference (and @audio2, @audio3 when you add more).
-            </p>
+            {profileVoiceName && !muapiAudioFileNames.length ? (
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                Your character profile&apos;s voice sample{" "}
+                <span className="font-medium">{profileVoiceName}</span> will be used as{" "}
+                <span className="font-mono text-zinc-700 dark:text-zinc-300">@audio1</span>
+                . Add files below to override it for this run.
+              </p>
+            ) : (
+              <p className="text-xs text-zinc-500">
+                Upload up to 3 clips. The prompt uses{" "}
+                <span className="font-mono text-zinc-700 dark:text-zinc-300">@audio1</span>{" "}
+                as the voice reference (and @audio2, @audio3 when you add more).
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <label className="cursor-pointer rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900">
                 <input

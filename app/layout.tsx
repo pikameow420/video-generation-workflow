@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AI Social — Script to video",
   description:
-    "Generate scripts, a character sheet, and a Seedance video via Atlas Cloud",
+    "Generate scripts, a frame sequence sheet, and a Seedance video",
 };
 
 export default function RootLayout({

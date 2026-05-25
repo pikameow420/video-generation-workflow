@@ -22,7 +22,19 @@ export type ReferenceImage = {
   originalName: string;
 };
 
-export type Step = "topic" | "scripts" | "sheet" | "video";
+/** Reusable mascot identity persisted per user (refs + art direction + voice + saved sheet). */
+export type CharacterProfile = {
+  id: string;
+  name: string;
+  artDirection: string;
+  referenceImages: Array<{ id: string; url: string; originalName: string }>;
+  voiceSample: { url: string; mimeType: string; originalName: string } | null;
+  sheetUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Step = "topic" | "scripts" | "character" | "sheet" | "video";
 export type ScriptMode = "generate" | "manual";
 export type SubtitleLanguage = "auto" | "en" | "hi" | "hinglish" | "script";
 
@@ -51,6 +63,10 @@ export type WizardSnapshot = {
   selectedId: string | null;
   scriptEdit: { title: string; body: string };
   artDirection: string;
+  /** Selected Character Profile for this run; null = one-off run without a profile. */
+  selectedCharacterProfileId: string | null;
+  /** Auto-attach the selected profile's voice sample to the MuAPI video request. */
+  useProfileVoice: boolean;
   sheetUrl: string | null;
   sheetSource: "generated" | "uploaded";
   selectedReferenceUrls: string[];

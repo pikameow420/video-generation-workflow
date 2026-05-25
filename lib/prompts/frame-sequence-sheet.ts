@@ -1,5 +1,5 @@
-export const CHARACTER_SHEET_BASE_RULES = [
-  "Create a single professional 3x3 storyboard grid image for use as a reference image for AI video.",
+export const FRAME_SEQUENCE_SHEET_BASE_RULES = [
+  "Create a single professional 3x3 frame-sequence storyboard grid image for use as a reference image for AI video.",
   "Character consistency requirements:",
   "- Lock one identity: same face structure, hairstyle, body proportions, age range, and outfit pieces across all panels.",
   "- Do not introduce alternate costumes, hair colors, or accessories unless explicitly requested.",
@@ -12,7 +12,7 @@ export const CHARACTER_SHEET_BASE_RULES = [
   "- Cinematic keyframe style, clean composition, no text labels.",
 ] as const;
 
-export function buildCharacterSheetPrompt(input: {
+export function buildFrameSequenceSheetPrompt(input: {
   scriptTitle: string;
   scriptBody: string;
   artDirection?: string;
@@ -21,7 +21,7 @@ export function buildCharacterSheetPrompt(input: {
   const extra = input.artDirection?.trim();
   const refs = input.referenceImageUrls?.filter(Boolean) ?? [];
   return [
-    ...CHARACTER_SHEET_BASE_RULES,
+    ...FRAME_SEQUENCE_SHEET_BASE_RULES,
     refs.length
       ? "Reference image grounding requirements (using attached reference images):"
       : null,

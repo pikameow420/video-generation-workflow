@@ -6,6 +6,7 @@ import {
   Check,
   Clapperboard,
   FileText,
+  LayoutGrid,
   Lightbulb,
   User,
 } from "lucide-react";
@@ -27,7 +28,8 @@ import {
 const STEP_ICONS: Record<Step, LucideIcon> = {
   topic: Lightbulb,
   scripts: FileText,
-  sheet: User,
+  character: User,
+  sheet: LayoutGrid,
   video: Clapperboard,
 };
 

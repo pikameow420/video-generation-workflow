@@ -31,6 +31,8 @@ export function createEmptyWizardSnapshot(): WizardSnapshot {
     selectedId: null,
     scriptEdit: { title: "", body: "" },
     artDirection: "",
+    selectedCharacterProfileId: null,
+    useProfileVoice: true,
     sheetUrl: null,
     sheetSource: "generated",
     selectedReferenceUrls: [],
@@ -56,7 +58,8 @@ export type WizardStepMeta = {
 export const WIZARD_STEPS: readonly WizardStepMeta[] = [
   { id: "topic", label: "Pick Topic", shortLabel: "Topic" },
   { id: "scripts", label: "Choose Script", shortLabel: "Scripts" },
-  { id: "sheet", label: "Character Sheet", shortLabel: "Sheet" },
+  { id: "character", label: "Character Profile", shortLabel: "Character" },
+  { id: "sheet", label: "Frame Sequence Sheet", shortLabel: "Sheet" },
   { id: "video", label: "Generate Video", shortLabel: "Video" },
 ] as const;
 
@@ -110,7 +113,12 @@ export function getWizardStepStates(
   });
 
   const hasScriptBody = scriptEdit.body.trim().length > 0;
-  const scriptsPhaseDone =
+  const characterReached =
+    currentStep === "character" ||
+    currentStep === "sheet" ||
+    currentStep === "video";
+  const scriptsPhaseDone = characterReached && hasScriptBody;
+  const characterPhaseDone =
     (currentStep === "sheet" || currentStep === "video") && hasScriptBody;
   const sheetPhaseDone = currentStep === "video" && Boolean(sheetUrl);
   const videoPhaseDone = Boolean(videoUrl);
@@ -131,6 +139,17 @@ export function getWizardStepStates(
         disabledReason: "Enter a topic or script first",
       };
 
+  const characterState: WizardStepUiState = hasScriptBody
+    ? {
+        accessible: true,
+        complete: characterPhaseDone,
+      }
+    : {
+        accessible: false,
+        complete: false,
+        disabledReason: "Choose a script first",
+      };
+
   const sheetState: WizardStepUiState = sheetUrl
     ? {
         accessible: true,
@@ -139,7 +158,7 @@ export function getWizardStepStates(
     : {
         accessible: false,
         complete: false,
-        disabledReason: "Generate or upload a character sheet first",
+        disabledReason: "Generate or reuse a frame sequence sheet first",
       };
 
   const videoState: WizardStepUiState = sheetUrl
@@ -150,12 +169,13 @@ export function getWizardStepStates(
     : {
         accessible: false,
         complete: false,
-        disabledReason: "Complete the character sheet step first",
+        disabledReason: "Complete the frame sequence sheet step first",
       };
 
   return {
     topic: topicState,
     scripts: scriptsState,
+    character: characterState,
     sheet: sheetState,
     video: videoState,
   };

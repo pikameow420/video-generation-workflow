@@ -71,6 +71,24 @@ export async function postJson<T>(
   return parseWithSchema(parsed, schema, fallbackError);
 }
 
+export async function putJson<T>(
+  url: string,
+  body: unknown,
+  fallbackError: string,
+  schema?: z.ZodType<T>,
+): Promise<T> {
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const parsed = await readJson<T & ApiErrorShape>(res);
+  if (!res.ok) {
+    throw new Error(resolveErrorMessage(parsed, fallbackError));
+  }
+  return parseWithSchema(parsed, schema, fallbackError);
+}
+
 export async function postForm<T>(
   url: string,
   body: FormData,
@@ -79,6 +97,23 @@ export async function postForm<T>(
 ): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
+    body,
+  });
+  const parsed = await readJson<T & ApiErrorShape>(res);
+  if (!res.ok) {
+    throw new Error(resolveErrorMessage(parsed, fallbackError));
+  }
+  return parseWithSchema(parsed, schema, fallbackError);
+}
+
+export async function putForm<T>(
+  url: string,
+  body: FormData,
+  fallbackError: string,
+  schema?: z.ZodType<T>,
+): Promise<T> {
+  const res = await fetch(url, {
+    method: "PUT",
     body,
   });
   const parsed = await readJson<T & ApiErrorShape>(res);

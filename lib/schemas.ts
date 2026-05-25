@@ -28,7 +28,7 @@ export const scriptsResponseSchema = z.object({
   scripts: z.array(scriptOptionSchema).length(4),
 });
 
-export const characterSheetRequestSchema = z.object({
+export const frameSequenceSheetRequestSchema = z.object({
   scriptTitle: z.string().min(1),
   scriptBody: z.string().min(1),
   /** Optional visual guidance for the generated sheet, not a persistent preference. */
@@ -36,7 +36,7 @@ export const characterSheetRequestSchema = z.object({
   /** Optional uploaded reference image URLs to steer identity/style consistency. */
   referenceImageUrls: z.array(z.string().min(1)).max(9).optional(),
 });
-export const characterSheetResponseSchema = z.object({
+export const frameSequenceSheetResponseSchema = z.object({
   mimeType: z.string().min(1),
   imageDataUrl: z.string().min(1),
 });
@@ -146,6 +146,94 @@ export const referenceImageSchema = z.object({
 
 export const referenceImageListResponseSchema = z.object({
   items: z.array(referenceImageSchema),
+});
+
+export const allowedCharacterVoiceMimeTypes = [
+  "audio/mpeg",
+  "audio/wav",
+  "audio/wave",
+  "audio/x-wav",
+] as const;
+export const maxCharacterVoiceBytes = maxMuapiAudioBytesPerFile;
+export const maxCharacterProfileNameChars = 80;
+export const maxCharacterProfileArtDirectionChars = 2000;
+
+/** Anchor reference resolved to a fresh URL at list time (signed URLs expire). */
+export const characterProfileReferenceSchema = z.object({
+  id: z.string().min(1),
+  url: z.string().min(1),
+  originalName: z.string(),
+});
+
+export const characterProfileSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  artDirection: z.string(),
+  referenceImages: z.array(characterProfileReferenceSchema),
+  voiceSample: z
+    .object({
+      url: z.string().min(1),
+      mimeType: z.string().min(1),
+      originalName: z.string(),
+    })
+    .nullable(),
+  /** Last saved frame-sequence-sheet for this profile, reusable across runs. */
+  sheetUrl: z.string().min(1).nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const characterProfileListResponseSchema = z.object({
+  items: z.array(characterProfileSchema),
+});
+
+/** JSON `payload` field of the multipart create request (voice file travels separately). */
+export const createCharacterProfileFieldsSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Profile name is required")
+    .max(maxCharacterProfileNameChars),
+  artDirection: z
+    .string()
+    .trim()
+    .max(maxCharacterProfileArtDirectionChars)
+    .optional()
+    .default(""),
+  referenceImageIds: z
+    .array(z.string().min(1))
+    .min(1, "At least one anchor reference image is required")
+    .max(9),
+});
+
+/** JSON `payload` field of the multipart update request. Voice file travels separately;
+ * `removeVoiceSample` clears the stored sample when no replacement file is sent. */
+export const updateCharacterProfileFieldsSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Profile name is required")
+    .max(maxCharacterProfileNameChars),
+  artDirection: z
+    .string()
+    .trim()
+    .max(maxCharacterProfileArtDirectionChars)
+    .optional()
+    .default(""),
+  referenceImageIds: z
+    .array(z.string().min(1))
+    .min(1, "At least one anchor reference image is required")
+    .max(9),
+  removeVoiceSample: z.boolean().optional().default(false),
+});
+
+export const saveCharacterProfileSheetRequestSchema = z.object({
+  imageDataUrl: z
+    .string()
+    .min(1)
+    .regex(/^data:image\/(png|jpeg|webp);base64,/, {
+      message: "imageDataUrl must be a base64 image data URL",
+    }),
 });
 
 export const savedScriptSourceSchema = z.enum([

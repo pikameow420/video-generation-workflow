@@ -1,9 +1,17 @@
 "use client";
 
-import { ChangeEvent, useCallback, useMemo, useState } from "react";
+import {
+  ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { ScriptHistorySidebar } from "@/components/pipeline/ScriptHistorySidebar";
 import type {
+  CharacterProfile,
   PendingVideoJob,
   ReferenceImage,
   SavedScript,
@@ -16,6 +24,7 @@ import type {
 } from "@/components/pipeline/types";
 import { PipelineStepper } from "@/components/pipeline/PipelineStepper";
 import { WizardSummaryCard } from "@/components/pipeline/WizardSummaryCard";
+import { CharacterStep } from "@/components/pipeline/steps/CharacterStep";
 import { ScriptsStep } from "@/components/pipeline/steps/ScriptsStep";
 import { SheetStep } from "@/components/pipeline/steps/SheetStep";
 import { TopicStep } from "@/components/pipeline/steps/TopicStep";
@@ -31,8 +40,9 @@ import {
   normalizeReferenceUrl,
   WIZARD_STORAGE_KEY,
 } from "@/lib/pipeline/wizard-utils";
-import { deleteJson, postForm, postJson } from "@/lib/api/client";
+import { deleteJson, postForm, postJson, putJson } from "@/lib/api/client";
 import { useApiAction } from "@/hooks/useApiAction";
+import { useCharacterProfiles } from "@/hooks/useCharacterProfiles";
 import { useCreatorPresets } from "@/hooks/useCreatorPresets";
 import { usePipelineLibraryApi } from "@/hooks/usePipelineLibraryApi";
 import { usePipelineVideoProvider } from "@/hooks/usePipelineVideoProvider";
@@ -42,7 +52,8 @@ import { usePipelineVideoStored } from "@/hooks/usePipelineVideoStored";
 import { useWizardLocalStorage } from "@/hooks/useWizardLocalStorage";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import {
-  characterSheetResponseSchema,
+  characterProfileSchema,
+  frameSequenceSheetResponseSchema,
   referenceImageSchema,
   savedScriptSchema,
   scriptsResponseSchema,
@@ -88,6 +99,15 @@ export function PipelineWizard() {
   );
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [loadingReferenceImages, setLoadingReferenceImages] = useState(false);
+  const [characterProfiles, setCharacterProfiles] = useState<CharacterProfile[]>(
+    [],
+  );
+  const [loadingCharacterProfiles, setLoadingCharacterProfiles] =
+    useState(false);
+  const [selectedCharacterProfileId, setSelectedCharacterProfileId] = useState<
+    string | null
+  >(null);
+  const [useProfileVoice, setUseProfileVoice] = useState(true);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoMeta, setVideoMeta] = useState<{ predictionId: string } | null>(
     null,
@@ -166,6 +186,17 @@ export function PipelineWizard() {
     setError,
   });
 
+  const {
+    loadCharacterProfiles,
+    createCharacterProfile,
+    updateCharacterProfile,
+    deleteCharacterProfile,
+  } = useCharacterProfiles({
+    setCharacterProfiles,
+    setLoadingCharacterProfiles,
+    setError,
+  });
+
   useWizardPendingVideoJob({
     pendingVideoJob,
     setVideoUrl,
@@ -202,7 +233,12 @@ export function PipelineWizard() {
   const selectedScript = scripts?.find((script) => script.id === selectedId) ?? null;
   const currentBatchPrimaryScript = scripts?.[0] ?? null;
   const currentBatchRemainingScripts = scripts?.slice(1) ?? [];
-  const isScriptsDone = step === "sheet" || step === "video";
+  const selectedCharacterProfile =
+    characterProfiles.find((profile) => profile.id === selectedCharacterProfileId) ??
+    null;
+  const isScriptsDone =
+    step === "character" || step === "sheet" || step === "video";
+  const isCharacterDone = step === "sheet" || step === "video";
   const isSheetDone = step === "video";
 
   const stepStates = useMemo(
@@ -243,12 +279,16 @@ export function PipelineWizard() {
       setStep(next);
       setError(null);
       if (next === "scripts") {
-        void loadReferenceImages();
         void loadSavedScripts();
+      }
+      if (next === "character") {
+        void loadReferenceImages();
+        void loadCharacterProfiles();
       }
     },
     [
       busy,
+      loadCharacterProfiles,
       loadReferenceImages,
       loadSavedScripts,
       pendingVideoJob,
@@ -275,6 +315,8 @@ export function PipelineWizard() {
       selectedId,
       scriptEdit,
       artDirection,
+      selectedCharacterProfileId,
+      useProfileVoice,
       sheetUrl,
       sheetSource,
       selectedReferenceUrls,
@@ -305,6 +347,8 @@ export function PipelineWizard() {
       selectedId,
       scriptEdit,
       artDirection,
+      selectedCharacterProfileId,
+      useProfileVoice,
       sheetUrl,
       sheetSource,
       selectedReferenceUrls,
@@ -343,6 +387,12 @@ export function PipelineWizard() {
     if (loaded.selectedId !== undefined) setSelectedId(loaded.selectedId);
     if (loaded.scriptEdit) setScriptEdit(loaded.scriptEdit);
     if (loaded.artDirection !== undefined) setArtDirection(loaded.artDirection);
+    if (loaded.selectedCharacterProfileId !== undefined) {
+      setSelectedCharacterProfileId(loaded.selectedCharacterProfileId);
+    }
+    if (loaded.useProfileVoice !== undefined) {
+      setUseProfileVoice(loaded.useProfileVoice);
+    }
     if (loaded.sheetUrl !== undefined) setSheetUrl(loaded.sheetUrl);
     if (loaded.sheetSource) setSheetSource(loaded.sheetSource);
     if (loaded.selectedReferenceUrls) {
@@ -386,15 +436,61 @@ export function PipelineWizard() {
     snapshot,
   });
 
+  /** After a localStorage restore, the selected profile's refs/voice live server-side — fetch once. */
+  const attemptedProfileRestore = useRef(false);
+  useEffect(() => {
+    if (attemptedProfileRestore.current) return;
+    if (!selectedCharacterProfileId) return;
+    attemptedProfileRestore.current = true;
+    void loadCharacterProfiles();
+  }, [selectedCharacterProfileId, loadCharacterProfiles]);
+
+  /**
+   * The sheet and video are derived from the script + character inputs. Whenever
+   * those inputs change, the previously generated outputs are stale: drop them and
+   * pull the user back to the Character step if they were sitting on an output step.
+   */
+  const invalidateGeneratedOutputs = useCallback(() => {
+    setSheetUrl(null);
+    setSheetSource("generated");
+    setVideoUrl(null);
+    setVideoMeta(null);
+    setVideoStatus("");
+    setVideoHasCaptions(false);
+    setPendingVideoJob(null);
+    setVideoGenerationBusy(false);
+    setSubtitleSrt("");
+    setSubtitleChars(null);
+    setSubtitleVideoDurationSec(null);
+    setStep((prev) => (prev === "sheet" || prev === "video" ? "character" : prev));
+  }, []);
+
   const onPickScript = useCallback(
     (id: string) => {
       setSelectedId(id);
       const script = scripts?.find((item) => item.id === id);
       if (script) {
+        if (
+          script.title !== scriptEdit.title ||
+          script.body !== scriptEdit.body
+        ) {
+          invalidateGeneratedOutputs();
+        }
         setScriptEdit({ title: script.title, body: script.body });
       }
     },
-    [scripts],
+    [invalidateGeneratedOutputs, scriptEdit, scripts],
+  );
+
+  /** Wraps setScriptEdit so manual title/body edits invalidate downstream outputs. */
+  const onScriptEditChange = useCallback(
+    (next: { title: string; body: string }) => {
+      if (next.title !== scriptEdit.title || next.body !== scriptEdit.body) {
+        invalidateGeneratedOutputs();
+      }
+      setScriptEdit(next);
+    },
+    [invalidateGeneratedOutputs, scriptEdit],
   );
 
   const saveScriptToLibrary = useCallback(
@@ -477,6 +573,7 @@ export function PipelineWizard() {
         scriptsResponseSchema,
       );
       const list = data.scripts;
+      invalidateGeneratedOutputs();
       setScripts(list);
       setSelectedId(list[0]?.id ?? null);
       setScriptEdit({ title: list[0]?.title ?? "", body: list[0]?.body ?? "" });
@@ -490,6 +587,7 @@ export function PipelineWizard() {
     audience,
     basePrompt,
     brandKit,
+    invalidateGeneratedOutputs,
     loadReferenceImages,
     loadSavedScripts,
     notes,
@@ -558,6 +656,7 @@ export function PipelineWizard() {
         return;
       }
       const inferredTitle = file.name.replace(/\.(txt|md)$/i, "").trim();
+      invalidateGeneratedOutputs();
       setScriptEdit((prev) => ({
         title: prev.title.trim() || inferredTitle || "Custom Script",
         body: text,
@@ -567,9 +666,10 @@ export function PipelineWizard() {
     } catch {
       setError("Could not read uploaded script file");
     }
-  }, []);
+  }, [invalidateGeneratedOutputs]);
 
   const createNewScript = useCallback(() => {
+    invalidateGeneratedOutputs();
     setScriptMode("manual");
     setScripts(null);
     setSelectedId(null);
@@ -577,7 +677,7 @@ export function PipelineWizard() {
     setManualScriptSource("manual");
     setStep("scripts");
     setError(null);
-  }, []);
+  }, [invalidateGeneratedOutputs]);
 
   const toggleScriptSidebar = useCallback(() => {
     const next = !isScriptSidebarOpen;
@@ -585,14 +685,23 @@ export function PipelineWizard() {
     if (next && !savedScriptsLoaded) void loadSavedScripts();
   }, [isScriptSidebarOpen, loadSavedScripts, savedScriptsLoaded]);
 
-  const applyScriptFromHistory = useCallback((item: { title: string; body: string }) => {
-    setScriptMode("manual");
-    setScriptEdit({ title: item.title, body: item.body });
-    setScripts(null);
-    setSelectedId(null);
-    setStep("scripts");
-    setError(null);
-  }, []);
+  const applyScriptFromHistory = useCallback(
+    (item: { title: string; body: string }) => {
+      if (
+        item.title !== scriptEdit.title ||
+        item.body !== scriptEdit.body
+      ) {
+        invalidateGeneratedOutputs();
+      }
+      setScriptMode("manual");
+      setScriptEdit({ title: item.title, body: item.body });
+      setScripts(null);
+      setSelectedId(null);
+      setStep("scripts");
+      setError(null);
+    },
+    [invalidateGeneratedOutputs, scriptEdit],
+  );
 
   const trackSheetScriptSelection = useCallback(() => {
     const title = scriptEdit.title.trim() || "Untitled Script";
@@ -623,12 +732,213 @@ export function PipelineWizard() {
     setExpandedHistoryId(null);
   }, [scriptEdit, scripts]);
 
+  const continueToCharacter = useCallback(async () => {
+    if (!scriptEdit.body.trim()) {
+      setError("Script body is required");
+      return;
+    }
+    await runApiAction(async () => {
+      await maybeSaveGeneratedScript();
+      setStep("character");
+      void loadReferenceImages();
+      void loadCharacterProfiles();
+    }, "Failed to continue");
+  }, [
+    loadCharacterProfiles,
+    loadReferenceImages,
+    maybeSaveGeneratedScript,
+    runApiAction,
+    scriptEdit,
+  ]);
+
+  /** Pre-fill the run's art direction, references, and voice from a profile. */
+  const applyCharacterProfile = useCallback(
+    (profile: CharacterProfile) => {
+      invalidateGeneratedOutputs();
+      setSelectedCharacterProfileId(profile.id);
+      setArtDirection(profile.artDirection);
+      setSelectedReferenceUrls(
+        dedupeReferenceUrls(profile.referenceImages.map((item) => item.url)),
+      );
+      setUseProfileVoice(true);
+    },
+    [invalidateGeneratedOutputs],
+  );
+
+  const onSelectCharacterProfile = useCallback(
+    (id: string | null) => {
+      if (id === null) {
+        invalidateGeneratedOutputs();
+        setSelectedCharacterProfileId(null);
+        return;
+      }
+      const profile = characterProfiles.find((item) => item.id === id);
+      if (!profile) return;
+      applyCharacterProfile(profile);
+      toast.success(`Using character profile "${profile.name}".`);
+    },
+    [applyCharacterProfile, characterProfiles, invalidateGeneratedOutputs],
+  );
+
+  /** Wraps setArtDirection so run-level art direction edits invalidate downstream outputs. */
+  const onArtDirectionChange = useCallback(
+    (next: string) => {
+      if (next !== artDirection) {
+        invalidateGeneratedOutputs();
+      }
+      setArtDirection(next);
+    },
+    [artDirection, invalidateGeneratedOutputs],
+  );
+
+  const onCreateCharacterProfileFromForm = useCallback(
+    async (input: {
+      name: string;
+      artDirection: string;
+      referenceImageIds: string[];
+      voiceFile: File | null;
+    }): Promise<boolean> => {
+      const name = input.name.trim();
+      if (!name) {
+        toast.error("Profile name is required.");
+        return false;
+      }
+      if (!input.referenceImageIds.length) {
+        toast.error("Select at least one anchor reference image for the profile.");
+        return false;
+      }
+      try {
+        setError(null);
+        const created = await createCharacterProfile({
+          name,
+          artDirection: input.artDirection.trim(),
+          referenceImageIds: input.referenceImageIds,
+          voiceFile: input.voiceFile,
+        });
+        toast.success(`Character profile "${created.name}" saved.`);
+        applyCharacterProfile(created);
+        return true;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Could not create character profile";
+        setError(message);
+        toast.error(message);
+        return false;
+      }
+    },
+    [applyCharacterProfile, createCharacterProfile],
+  );
+
+  const onUpdateCharacterProfileFromForm = useCallback(
+    async (
+      id: string,
+      input: {
+        name: string;
+        artDirection: string;
+        referenceImageIds: string[];
+        voiceFile: File | null;
+        removeVoiceSample: boolean;
+      },
+    ): Promise<boolean> => {
+      const name = input.name.trim();
+      if (!name) {
+        toast.error("Profile name is required.");
+        return false;
+      }
+      if (!input.referenceImageIds.length) {
+        toast.error("Select at least one anchor reference image for the profile.");
+        return false;
+      }
+      try {
+        setError(null);
+        const updated = await updateCharacterProfile(id, {
+          name,
+          artDirection: input.artDirection.trim(),
+          referenceImageIds: input.referenceImageIds,
+          voiceFile: input.voiceFile,
+          removeVoiceSample: input.removeVoiceSample,
+        });
+        toast.success(`Character profile "${updated.name}" updated.`);
+        if (selectedCharacterProfileId === updated.id) {
+          applyCharacterProfile(updated);
+        }
+        return true;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Could not update character profile";
+        setError(message);
+        toast.error(message);
+        return false;
+      }
+    },
+    [applyCharacterProfile, selectedCharacterProfileId, updateCharacterProfile],
+  );
+
+  const deleteCharacterProfileFromLibrary = useCallback(
+    async (profile: CharacterProfile) => {
+      await runApiAction(async () => {
+        await deleteCharacterProfile(profile.id);
+        if (selectedCharacterProfileId === profile.id) {
+          invalidateGeneratedOutputs();
+          setSelectedCharacterProfileId(null);
+        }
+        toast.success(`Character profile "${profile.name}" deleted.`);
+      }, "Delete failed");
+    },
+    [
+      deleteCharacterProfile,
+      invalidateGeneratedOutputs,
+      runApiAction,
+      selectedCharacterProfileId,
+    ],
+  );
+
+  const reuseProfileSheet = useCallback(() => {
+    const saved = selectedCharacterProfile?.sheetUrl;
+    if (!saved) return;
+    setSheetUrl(saved);
+    setSheetSource("generated");
+    setVideoUrl(null);
+    setVideoMeta(null);
+    setVideoHasCaptions(false);
+    setSubtitleSrt("");
+    setSubtitleChars(null);
+    setSubtitleVideoDurationSec(null);
+    trackSheetScriptSelection();
+    setStep("sheet");
+    toast.success("Reusing the profile's saved frame sequence sheet.");
+  }, [selectedCharacterProfile, trackSheetScriptSelection]);
+
+  const saveSheetToSelectedProfile = useCallback(
+    async (imageDataUrl: string) => {
+      if (!selectedCharacterProfileId) return;
+      try {
+        const updated = await putJson(
+          `/api/character-profiles/${encodeURIComponent(selectedCharacterProfileId)}/sheet`,
+          { imageDataUrl },
+          "Could not save the sheet to the profile",
+          characterProfileSchema,
+        );
+        setCharacterProfiles((prev) =>
+          prev.map((item) => (item.id === updated.id ? updated : item)),
+        );
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Could not save the sheet to the profile",
+        );
+      }
+    },
+    [selectedCharacterProfileId],
+  );
+
   const generateSheet = useCallback(async () => {
-    toast.info("Generating character sheet...");
+    toast.info("Generating frame sequence sheet...");
     await runApiAction(async () => {
       await maybeSaveGeneratedScript();
       const data = await postJson(
-        "/api/character-sheet",
+        "/api/frame-sequence-sheet",
         {
           scriptTitle: scriptEdit.title,
           scriptBody: scriptEdit.body,
@@ -637,19 +947,21 @@ export function PipelineWizard() {
             ? selectedReferenceUrls
             : undefined,
         },
-        "Character sheet failed",
-        characterSheetResponseSchema,
+        "Frame sequence sheet failed",
+        frameSequenceSheetResponseSchema,
       );
       setSheetUrl(data.imageDataUrl);
       setSheetSource("generated");
       trackSheetScriptSelection();
       setStep("sheet");
-      toast.success("Character sheet generated.");
+      toast.success("Frame sequence sheet generated.");
+      await saveSheetToSelectedProfile(data.imageDataUrl);
     }, "Request failed");
   }, [
     artDirection,
     maybeSaveGeneratedScript,
     runApiAction,
+    saveSheetToSelectedProfile,
     scriptEdit,
     selectedReferenceUrls,
     trackSheetScriptSelection,
@@ -741,6 +1053,29 @@ export function PipelineWizard() {
     [],
   );
 
+  /** Pull the selected profile's stored voice sample and re-encode it as a MuAPI audio data URL. */
+  const fetchProfileVoiceDataUrl = useCallback(async (): Promise<string | null> => {
+    const voice = selectedCharacterProfile?.voiceSample;
+    if (!voice) return null;
+    const res = await fetch(voice.url);
+    if (!res.ok) {
+      throw new Error("Could not download the profile's voice sample");
+    }
+    const blob = await res.blob();
+    const rawDataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") resolve(reader.result);
+        else reject(new Error("Could not read the profile's voice sample"));
+      };
+      reader.onerror = () =>
+        reject(reader.error ?? new Error("Could not read the profile's voice sample"));
+      reader.readAsDataURL(blob);
+    });
+    const base64 = rawDataUrl.slice(rawDataUrl.indexOf(",") + 1);
+    return `data:${voice.mimeType};base64,${base64}`;
+  }, [selectedCharacterProfile]);
+
   const startVideo = useCallback(async () => {
     if (!sheetUrl) return;
     toast.info("Preparing references and starting video job...");
@@ -761,6 +1096,15 @@ export function PipelineWizard() {
         };
         if (videoProvider === "muapi" && muapiAudioDataUrls.length > 0) {
           payload.audioDataUrls = muapiAudioDataUrls;
+        } else if (
+          videoProvider === "muapi" &&
+          useProfileVoice &&
+          selectedCharacterProfile?.voiceSample
+        ) {
+          const profileVoice = await fetchProfileVoiceDataUrl();
+          if (profileVoice) {
+            payload.audioDataUrls = [profileVoice];
+          }
         }
         const data = await postJson(
           "/api/video",
@@ -783,7 +1127,16 @@ export function PipelineWizard() {
         if (!jobStarted) setVideoGenerationBusy(false);
       }
     }, "Request failed");
-  }, [runApiAction, scriptEdit, sheetUrl, videoProvider, muapiAudioDataUrls]);
+  }, [
+    fetchProfileVoiceDataUrl,
+    muapiAudioDataUrls,
+    runApiAction,
+    scriptEdit,
+    selectedCharacterProfile,
+    sheetUrl,
+    useProfileVoice,
+    videoProvider,
+  ]);
 
   const onUploadReference = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
@@ -802,6 +1155,7 @@ export function PipelineWizard() {
           referenceImageSchema,
         );
         if (!data.url) throw new Error("Upload failed: missing url");
+        invalidateGeneratedOutputs();
         setSelectedReferenceUrls((prev) =>
           dedupeReferenceUrls([String(data.url), ...prev]),
         );
@@ -809,18 +1163,22 @@ export function PipelineWizard() {
         toast.success("Reference image uploaded.");
       }, "Upload failed");
     },
-    [loadReferenceImages, runApiAction],
+    [invalidateGeneratedOutputs, loadReferenceImages, runApiAction],
   );
 
-  const selectReferenceImage = useCallback((url: string) => {
-    const normalized = normalizeReferenceUrl(url);
-    setSelectedReferenceUrls((prev) => {
-      const current = dedupeReferenceUrls(prev);
-      return current.includes(normalized)
-        ? current.filter((item) => item !== normalized)
-        : dedupeReferenceUrls([normalized, ...current]);
-    });
-  }, []);
+  const selectReferenceImage = useCallback(
+    (url: string) => {
+      const normalized = normalizeReferenceUrl(url);
+      invalidateGeneratedOutputs();
+      setSelectedReferenceUrls((prev) => {
+        const current = dedupeReferenceUrls(prev);
+        return current.includes(normalized)
+          ? current.filter((item) => item !== normalized)
+          : dedupeReferenceUrls([normalized, ...current]);
+      });
+    },
+    [invalidateGeneratedOutputs],
+  );
 
   const deleteReferenceFromLibrary = useCallback(
     async (item: ReferenceImage) => {
@@ -829,21 +1187,32 @@ export function PipelineWizard() {
           `/api/reference-images?id=${encodeURIComponent(item.id)}`,
           "Failed to delete reference image",
         );
+        const wasSelected = selectedReferenceUrls.some(
+          (url) => normalizeReferenceUrl(url) === normalizeReferenceUrl(item.url),
+        );
+        const wasUsedAsSheet = Boolean(
+          sheetUrl &&
+            normalizeReferenceUrl(sheetUrl) === normalizeReferenceUrl(item.url),
+        );
+        if (wasSelected || wasUsedAsSheet) {
+          invalidateGeneratedOutputs();
+        }
         setSelectedReferenceUrls((prev) =>
           prev.filter(
             (url) => normalizeReferenceUrl(url) !== normalizeReferenceUrl(item.url),
           ),
         );
-        setSheetUrl((prev) =>
-          prev && normalizeReferenceUrl(prev) === normalizeReferenceUrl(item.url)
-            ? null
-            : prev,
-        );
         await loadReferenceImages();
         toast.success("Reference removed from library.");
       }, "Delete failed");
     },
-    [loadReferenceImages, runApiAction],
+    [
+      invalidateGeneratedOutputs,
+      loadReferenceImages,
+      runApiAction,
+      selectedReferenceUrls,
+      sheetUrl,
+    ],
   );
 
   const useSelectedReferenceDirectly = useCallback(() => {
@@ -938,7 +1307,7 @@ export function PipelineWizard() {
           onApplyPreset={applyCreatorPreset}
           onSavePreset={onSavePreset}
           onDeletePreset={deleteCreatorPresetById}
-          onScriptEditChange={setScriptEdit}
+          onScriptEditChange={onScriptEditChange}
           onSaveManualScriptChange={setSaveManualScript}
           onGenerateScripts={() => void generateScripts()}
           onContinueManual={() => void continueWithManualScript()}
@@ -962,28 +1331,59 @@ export function PipelineWizard() {
           selectedId={selectedId}
           selectedScript={selectedScript}
           scriptEdit={scriptEdit}
-          artDirection={artDirection}
           busy={busy}
-          referenceImages={referenceImages}
-          selectedReferenceUrls={selectedReferenceUrls}
-          loadingReferenceImages={loadingReferenceImages}
           onPickScript={onPickScript}
           onCreateNewScript={createNewScript}
-          onScriptEditChange={setScriptEdit}
-          onArtDirectionChange={setArtDirection}
-          onUploadReference={onUploadReference}
-          onRefreshReferences={() => void loadReferenceImages()}
-          onSelectReferenceImage={selectReferenceImage}
-          onRemoveReferenceImage={selectReferenceImage}
-          onDeleteReferenceImage={(item) => void deleteReferenceFromLibrary(item)}
-          onUseSelectedReferenceDirectly={useSelectedReferenceDirectly}
-          onGenerateSheet={() => void generateSheet()}
+          onScriptEditChange={onScriptEditChange}
+          onContinueToCharacter={() => void continueToCharacter()}
         />
       ) : isScriptsDone && scriptEdit.body.trim() ? (
         <WizardSummaryCard
           title="Script Selected"
           detail={scriptEdit.title || "Untitled script"}
           onEdit={() => navigateToStep("scripts")}
+        />
+      ) : null}
+
+      {step === "character" ? (
+        <CharacterStep
+          busy={busy}
+          profiles={characterProfiles}
+          loadingProfiles={loadingCharacterProfiles}
+          selectedProfileId={selectedCharacterProfileId}
+          selectedProfile={selectedCharacterProfile}
+          artDirection={artDirection}
+          referenceImages={referenceImages}
+          selectedReferenceUrls={selectedReferenceUrls}
+          loadingReferenceImages={loadingReferenceImages}
+          useProfileVoice={useProfileVoice}
+          onSelectProfile={onSelectCharacterProfile}
+          onDeleteProfile={(profile) =>
+            void deleteCharacterProfileFromLibrary(profile)
+          }
+          onRefreshProfiles={() => void loadCharacterProfiles()}
+          onCreateProfile={onCreateCharacterProfileFromForm}
+          onUpdateProfile={onUpdateCharacterProfileFromForm}
+          onArtDirectionChange={onArtDirectionChange}
+          onUploadReference={onUploadReference}
+          onRefreshReferences={() => void loadReferenceImages()}
+          onSelectReferenceImage={selectReferenceImage}
+          onRemoveReferenceImage={selectReferenceImage}
+          onDeleteReferenceImage={(item) => void deleteReferenceFromLibrary(item)}
+          onUseProfileVoiceChange={setUseProfileVoice}
+          onUseSelectedReferenceDirectly={useSelectedReferenceDirectly}
+          onReuseProfileSheet={reuseProfileSheet}
+          onGenerateSheet={() => void generateSheet()}
+        />
+      ) : isCharacterDone && scriptEdit.body.trim() ? (
+        <WizardSummaryCard
+          title="Character Ready"
+          detail={
+            selectedCharacterProfile
+              ? selectedCharacterProfile.name
+              : "One-off run (no profile)"
+          }
+          onEdit={() => navigateToStep("character")}
         />
       ) : null}
 
@@ -1000,18 +1400,23 @@ export function PipelineWizard() {
           canStartVideo={videoBackendReady}
           videoGenerationBusy={videoGenerationBusy || Boolean(pendingVideoJob)}
           muapiAudioFileNames={muapiAudioFileNames}
+          profileVoiceName={
+            useProfileVoice && selectedCharacterProfile?.voiceSample
+              ? selectedCharacterProfile.voiceSample.originalName
+              : null
+          }
           onMuapiAudioFilesChange={onMuapiAudioFilesChange}
           onClearMuapiAudio={onClearMuapiAudio}
           onStartVideo={() => void startVideo()}
           onRegenerate={() =>
             sheetSource === "uploaded"
-              ? navigateToStep("scripts")
+              ? navigateToStep("character")
               : void generateSheet()
           }
         />
       ) : isSheetDone && sheetUrl ? (
         <WizardSummaryCard
-          title="Character Sheet Generated"
+          title="Frame Sequence Sheet Ready"
           detail="Ready for video generation"
           thumbnailUrl={sheetUrl}
           onEdit={() => navigateToStep("sheet")}

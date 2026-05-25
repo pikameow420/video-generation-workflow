@@ -2,7 +2,7 @@
 
 A **Next.js app** for solo creators: go from a topic (or your own script) to a **short vertical video** with optional **captions burned in**.
 
-The UI is a **four-step wizard**: topic & scripts → pick or edit a script & references → character sheet → generate video, then transcribe and burn subtitles if you want. **Sign-in is required** to use the pipeline, library, and paid API routes.
+The UI is a **five-step wizard**: topic & scripts → pick or edit a script → character profile & references → frame sequence sheet → generate video, then transcribe and burn subtitles if you want. **Sign-in is required** to use the pipeline, library, and paid API routes.
 
 ---
 
@@ -13,7 +13,8 @@ The UI is a **four-step wizard**: topic & scripts → pick or edit a script & re
 | **Sign-in** | **Supabase Auth** (email/password at `/login`). Sessions are cookie-based; `/` and `/library` redirect when unsigned-in. |
 | **Scripts** | Generate **four** options via Deepseek, paste/upload your own, or pull from a **saved script library** (local JSON index *or* **Supabase Postgres** when persistence is configured). |
 | **Voice & brand** | **Base prompt**, **brand kit**, and **named presets** (topic, tone, audience, notes, art direction, etc.)—presets live in the browser’s `localStorage`. |
-| **Look** | Generate a **3×3 character sheet** from the script (OpenAI `gpt-image-1.5` default), optionally steer with **reference images** from your library. |
+| **Character profiles** | Save a reusable **Character Profile** (name, art direction, anchor reference photos, optional MP3/WAV voice sample, last frame-sequence-sheet). Select it on the new **Character** step to pre-fill refs/voice instead of re-uploading every run. Persisted per user in Supabase (or a local JSON index). One-off runs without a profile still work. |
+| **Look** | Generate a **3×3 frame-sequence-sheet** from the script (OpenAI `gpt-image-1.5` default)—the frame sequence handed to Seedance/MuAPI—optionally steered by **reference images** from your library or profile. Reuse a profile’s saved sheet to skip regeneration. |
 | **Video** | **Seedance** reference-to-video via **Atlas Cloud** or **MuAPI** (Omni Reference No Video Fast default); async poll until the clip is ready. |
 | **Library** | **`/library`** lists pipeline MP4s stored when Supabase persistence is enabled (scoped to the signed-in user). |
 | **Captions** | OpenAI Whisper **transcription** or **exact script text** timed to clip length; tweak SRT and **burn** with **ffmpeg** (English, Hindi, Hinglish, or your written script). |
@@ -25,9 +26,10 @@ The UI is a **four-step wizard**: topic & scripts → pick or edit a script & re
 
 1. **Sign in** at `/login` (or get redirected there from `/`).
 2. **Topic** — Generate scripts or bring your own; optional presets and brand kit.
-3. **Scripts** — Choose one line, edit if needed, set **art direction**, attach reference images.
-4. **Sheet** — Review the generated (or uploaded) character sheet.
-5. **Video** — Start generation, wait for the file, then **generate subtitles** and **burn** them into the video.
+3. **Scripts** — Choose one line and edit it if needed.
+4. **Character** — Pick an existing **Character Profile** (refs, art direction, voice pre-filled) or set them up ad-hoc; optionally save the selection as a new profile.
+5. **Sheet** — Review the generated (or reused) frame sequence sheet.
+6. **Video** — Start generation, wait for the file, then **generate subtitles** and **burn** them into the video.
 
 ---
 
@@ -54,7 +56,9 @@ The UI is a **four-step wizard**: topic & scripts → pick or edit a script & re
 | Route guard (session + redirects) | `proxy.ts`, `lib/supabase/route-guard.ts` |
 | Auth helpers | `lib/auth/require-user.ts`, `lib/auth/session-user.ts`, `lib/auth/prediction-ownership.ts` |
 | Script API | `app/api/scripts/route.ts` |
-| Character sheet API | `app/api/character-sheet/route.ts` |
+| Frame sequence sheet API | `app/api/frame-sequence-sheet/route.ts` |
+| Character profiles API | `app/api/character-profiles/route.ts`, `app/api/character-profiles/[id]/sheet/route.ts` |
+| Character profiles store | `lib/character-profiles/store.ts` |
 | Video API | `app/api/video/route.ts` |
 | Env & defaults | `lib/env.ts` |
 | Request/response schemas | `lib/schemas.ts` |
@@ -62,7 +66,7 @@ The UI is a **four-step wizard**: topic & scripts → pick or edit a script & re
 | MuAPI video helpers | `lib/muapi/client.ts` |
 | Persistence toggle | `lib/persistence/backend.ts` |
 | Creator presets (client storage) | `lib/pipeline/creator-presets.ts` |
-| Security tests | `tests/security-boundaries.test.ts` |
+| Tests | `tests/security-boundaries.test.ts`, `tests/character-profiles-store.test.ts` |
 
 ---
 
@@ -92,15 +96,18 @@ Paid and vault API routes call `requireUser()` and return **401** without a vali
 
 ### Supabase persistence (optional)
 
-When **`NEXT_PUBLIC_SUPABASE_URL`** and **`SUPABASE_SECRET_KEY`** (service role, server-only) are both set, saved scripts, reference images, and pipeline MP4s go to Postgres + **private** Storage buckets. Vault rows are scoped by `user_id`.
+When **`NEXT_PUBLIC_SUPABASE_URL`** and **`SUPABASE_SECRET_KEY`** (service role, server-only) are both set, saved scripts, reference images, character profiles, and pipeline MP4s go to Postgres + **private** Storage buckets. Vault rows are scoped by `user_id`.
 
-Optional bucket/tuning vars: `SUPABASE_REFERENCE_IMAGES_BUCKET`, `SUPABASE_PIPELINE_VIDEOS_BUCKET`, `SUPABASE_SIGNED_URL_EXPIRES_SEC`.
+Optional bucket/tuning vars: `SUPABASE_REFERENCE_IMAGES_BUCKET`, `SUPABASE_PIPELINE_VIDEOS_BUCKET`, `SUPABASE_CHARACTER_ASSETS_BUCKET`, `SUPABASE_SIGNED_URL_EXPIRES_SEC`.
 
 Apply migrations in [`supabase/migrations/`](supabase/migrations/):
 
 - `20250517120000_initial_persistence.sql` — core tables + storage buckets
 - `20250518120000_add_pipeline_videos_columns.sql` — `title`, `is_deleted`
 - `20250518130000_add_prediction_tracking.sql` — in-progress video job ownership
+- `20250524120000_character_profiles.sql` — `character_profiles` table + `character-assets` bucket
+
+**Character profiles (local fallback when persistence off):** profile metadata in `CHARACTER_PROFILE_INDEX_PATH` (default `data/character-profiles.json`); voice samples and saved sheets under `LOCAL_CHARACTER_ASSET_DIR` (default `public/uploads/character-assets`).
 
 **Reference images (local fallbacks when persistence off):** files under `public/uploads/reference-images`, index path configurable via `REFERENCE_IMAGE_INDEX_PATH`. On the Scripts step, hover a thumbnail and use the **X** to remove that image from the library (and index); **blob mode** needs `BLOB_READ_WRITE_TOKEN` for uploads and deletes.
 

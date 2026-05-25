@@ -24,13 +24,24 @@ import { GET as scriptsLibraryGet, POST as scriptsLibraryPost } from "@/app/api/
 import { POST as videoPost } from "@/app/api/video/route";
 import { GET as videoStatusGet } from "@/app/api/video/status/route";
 import { GET as pipelineVideosGet } from "@/app/api/pipeline-videos/route";
+import {
+  DELETE as characterProfilesDelete,
+  GET as characterProfilesGet,
+  POST as characterProfilesPost,
+} from "@/app/api/character-profiles/route";
+import { PUT as characterProfileUpdatePut } from "@/app/api/character-profiles/[id]/route";
+import { PUT as characterProfileSheetPut } from "@/app/api/character-profiles/[id]/sheet/route";
+import { POST as frameSequenceSheetPost } from "@/app/api/frame-sequence-sheet/route";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const mockUserA = { id: "user-a-uuid", email: "usera@test.com" };
 const mockUserB = { id: "user-b-uuid", email: "userb@test.com" };
 
-function createMockRequest(url: string, options: RequestInit = {}) {
+function createMockRequest(
+  url: string,
+  options: ConstructorParameters<typeof NextRequest>[1] = {},
+) {
   return new NextRequest(new URL(url, "http://localhost:3000"), options);
 }
 
@@ -276,6 +287,193 @@ describe("Security Boundaries", () => {
   describe("7. Sign out clears pendingVideoJob (client-side - documented)", () => {
     it("useAuthGuard hook should be implemented to clear pendingVideoJob on user change", () => {
       expect(true).toBe(true);
+    });
+  });
+
+  describe("8. Character profiles - authentication required", () => {
+    it("GET /api/character-profiles without session returns 401", async () => {
+      mockAuthForUser(null);
+
+      const res = await characterProfilesGet();
+      const json = await res.json();
+
+      expect(res.status).toBe(401);
+      expect(json.error).toBe("Unauthorized");
+    });
+
+    it("POST /api/character-profiles without session returns 401", async () => {
+      mockAuthForUser(null);
+
+      const form = new FormData();
+      form.set("payload", JSON.stringify({ name: "Mascot" }));
+      const req = createMockRequest("/api/character-profiles", {
+        method: "POST",
+        body: form,
+      });
+
+      const res = await characterProfilesPost(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(401);
+      expect(json.error).toBe("Unauthorized");
+    });
+
+    it("DELETE /api/character-profiles without session returns 401", async () => {
+      mockAuthForUser(null);
+
+      const req = createMockRequest(
+        "/api/character-profiles?id=11111111-1111-4111-8111-111111111111",
+        { method: "DELETE" },
+      );
+      const res = await characterProfilesDelete(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(401);
+      expect(json.error).toBe("Unauthorized");
+    });
+
+    it("PUT /api/character-profiles/[id] without session returns 401", async () => {
+      mockAuthForUser(null);
+
+      const form = new FormData();
+      form.set(
+        "payload",
+        JSON.stringify({ name: "Mascot", referenceImageIds: ["ref-1"] }),
+      );
+      const req = createMockRequest(
+        "/api/character-profiles/11111111-1111-4111-8111-111111111111",
+        { method: "PUT", body: form },
+      );
+      const res = await characterProfileUpdatePut(req, {
+        params: Promise.resolve({ id: "11111111-1111-4111-8111-111111111111" }),
+      });
+      const json = await res.json();
+
+      expect(res.status).toBe(401);
+      expect(json.error).toBe("Unauthorized");
+    });
+
+    it("PUT /api/character-profiles/[id]/sheet without session returns 401", async () => {
+      mockAuthForUser(null);
+
+      const req = createMockRequest(
+        "/api/character-profiles/11111111-1111-4111-8111-111111111111/sheet",
+        {
+          method: "PUT",
+          body: JSON.stringify({ imageDataUrl: "data:image/png;base64,AA==" }),
+        },
+      );
+      const res = await characterProfileSheetPut(req, {
+        params: Promise.resolve({ id: "11111111-1111-4111-8111-111111111111" }),
+      });
+      const json = await res.json();
+
+      expect(res.status).toBe(401);
+      expect(json.error).toBe("Unauthorized");
+    });
+
+    it("POST /api/character-profiles without reference images returns 400", async () => {
+      mockAuthForUser(mockUserA);
+
+      const form = new FormData();
+      form.set(
+        "payload",
+        JSON.stringify({ name: "Mascot", referenceImageIds: [] }),
+      );
+      const req = createMockRequest("/api/character-profiles", {
+        method: "POST",
+        body: form,
+      });
+
+      const res = await characterProfilesPost(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error).toMatch(/reference image/i);
+    });
+
+    it("POST /api/frame-sequence-sheet without session returns 401", async () => {
+      mockAuthForUser(null);
+
+      const req = createMockRequest("/api/frame-sequence-sheet", {
+        method: "POST",
+        body: JSON.stringify({ scriptTitle: "T", scriptBody: "B" }),
+      });
+      const res = await frameSequenceSheetPost(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(401);
+      expect(json.error).toBe("Unauthorized");
+    });
+  });
+
+  describe("9. User A's character profiles are not visible to User B", () => {
+    it("GET /api/character-profiles queries only the requesting user's rows", async () => {
+      mockAuthForUser(mockUserB);
+
+      const order = vi.fn().mockResolvedValue({ data: [], error: null });
+      const eq = vi.fn().mockReturnValue({ order });
+      const select = vi.fn().mockReturnValue({ eq });
+      mockAdminClient(vi.fn().mockReturnValue({ select }));
+
+      const res = await characterProfilesGet();
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.items).toEqual([]);
+      expect(eq).toHaveBeenCalledWith("user_id", mockUserB.id);
+    });
+
+    it("PUT .../[id] on a profile owned by User A returns 404 for User B", async () => {
+      mockAuthForUser(mockUserB);
+
+      const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+      const eqUser = vi.fn().mockReturnValue({ maybeSingle });
+      const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+      const select = vi.fn().mockReturnValue({ eq: eqId });
+      mockAdminClient(vi.fn().mockReturnValue({ select }));
+
+      const profileId = "33333333-3333-4333-8333-333333333333";
+      const form = new FormData();
+      form.set(
+        "payload",
+        JSON.stringify({ name: "Hijack", referenceImageIds: ["ref-1"] }),
+      );
+      const req = createMockRequest(`/api/character-profiles/${profileId}`, {
+        method: "PUT",
+        body: form,
+      });
+      const res = await characterProfileUpdatePut(req, {
+        params: Promise.resolve({ id: profileId }),
+      });
+
+      expect(res.status).toBe(404);
+      expect(eqUser).toHaveBeenCalledWith("user_id", mockUserB.id);
+    });
+
+    it("PUT .../sheet on a profile owned by User A returns 404 for User B", async () => {
+      mockAuthForUser(mockUserB);
+
+      const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+      const eqUser = vi.fn().mockReturnValue({ maybeSingle });
+      const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+      const select = vi.fn().mockReturnValue({ eq: eqId });
+      mockAdminClient(vi.fn().mockReturnValue({ select }));
+
+      const profileId = "22222222-2222-4222-8222-222222222222";
+      const req = createMockRequest(
+        `/api/character-profiles/${profileId}/sheet`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ imageDataUrl: "data:image/png;base64,AA==" }),
+        },
+      );
+      const res = await characterProfileSheetPut(req, {
+        params: Promise.resolve({ id: profileId }),
+      });
+
+      expect(res.status).toBe(404);
+      expect(eqUser).toHaveBeenCalledWith("user_id", mockUserB.id);
     });
   });
 });

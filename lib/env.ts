@@ -15,6 +15,15 @@ const envSchema = z.object({
     .string()
     .default("data/captioned-videos.json"),
   SAVED_SCRIPT_INDEX_PATH: z.string().default("data/saved-scripts.json"),
+  CHARACTER_PROFILE_INDEX_PATH: z
+    .string()
+    .default("data/character-profiles.json"),
+  LOCAL_CHARACTER_ASSET_DIR: z
+    .string()
+    .default("public/uploads/character-assets"),
+  LOCAL_CHARACTER_ASSET_BASE_PATH: z
+    .string()
+    .default("/uploads/character-assets"),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_IMAGE_MODEL: z.string().default("gpt-image-1.5"),
   OPENAI_IMAGE_SIZE: z.string().default("1024x1536"),
@@ -81,6 +90,7 @@ const envSchema = z.object({
   SUPABASE_SECRET_KEY: z.string().min(1).optional(),
   SUPABASE_REFERENCE_IMAGES_BUCKET: z.string().min(1).default("reference-images"),
   SUPABASE_PIPELINE_VIDEOS_BUCKET: z.string().min(1).default("pipeline-videos"),
+  SUPABASE_CHARACTER_ASSETS_BUCKET: z.string().min(1).default("character-assets"),
   SUPABASE_SIGNED_URL_EXPIRES_SEC: z.coerce.number().int().positive().max(86400).default(3600),
 });
 

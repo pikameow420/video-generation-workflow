@@ -26,8 +26,10 @@
 /data/reference-images.json
 /data/saved-scripts.json
 /data/captioned-videos.json
+/data/character-profiles.json
 /public/uploads/reference-images
 /public/uploads/captioned-videos
+/public/uploads/character-assets
 
 # debug
 npm-debug.log*

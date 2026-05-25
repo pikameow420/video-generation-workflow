@@ -1,6 +1,6 @@
 export const VIDEO_BASE_RULES = [
   "Create a short vertical-ready social video with native audio.",
-  "Keep motion coherent with the character sheet; natural pacing.",
+  "Keep motion coherent with the frame sequence sheet; natural pacing.",
   "Framing & focus: center the hero character visually; keep them sharp and clearly in frame when visible (readable face and outfit—not soft or lost in the background).",
   "Lipsync: when the character's speaking face is on camera, lip and jaw movement should believably match the narration's timing and words (avoid silent mouth during speech or mouthing mismatches).",
   "Character consistency lock:",
@@ -35,7 +35,7 @@ const MUAPI_PROMPT_MAX_CHARS = 4000;
 
 const MUAPI_OMNI_RULES = [
   "Create a short vertical-ready social video with native audio.",
-  "Keep motion coherent with the character sheet; natural pacing.",
+  "Keep motion coherent with the frame sequence sheet; natural pacing.",
   "Framing & focus: center the hero character visually; keep them sharp and clearly in frame when visible (readable face and outfit—not soft or lost in the background).",
   "Lipsync: when the character's speaking face is on camera, lip and jaw movement should believably match the narration's timing and words (avoid silent mouth during speech or mouthing mismatches).",
   "Character consistency lock:",

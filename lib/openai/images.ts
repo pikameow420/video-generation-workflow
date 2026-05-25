@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getEnv } from "@/lib/env";
 
-type GenerateCharacterSheetInput = {
+type GenerateFrameSequenceSheetInput = {
   prompt: string;
   requestUrl: string;
   referenceImageUrls?: string[];
@@ -134,8 +134,8 @@ async function resolveImageDataUrlFromResponse(
   throw new Error("OpenAI image response missing both b64_json and url");
 }
 
-export async function generateCharacterSheetWithOpenAI(
-  input: GenerateCharacterSheetInput,
+export async function generateFrameSequenceSheetWithOpenAI(
+  input: GenerateFrameSequenceSheetInput,
 ): Promise<{ mimeType: string; dataUrl: string }> {
   const env = getEnv();
   const apiKey = env.OPENAI_API_KEY;

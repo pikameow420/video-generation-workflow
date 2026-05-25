@@ -11,7 +11,7 @@ export default function LoginPage() {
           AI Social
         </h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Sign in to generate scripts, character sheets, and videos.
+          Sign in to generate scripts, frame sequence sheets, and videos.
         </p>
       </div>
       <Suspense

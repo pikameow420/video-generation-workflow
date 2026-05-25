@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { characterSheetRequestSchema } from "@/lib/schemas";
-import { generateCharacterSheetWithOpenAI } from "@/lib/openai/images";
-import { buildCharacterSheetPrompt } from "@/lib/prompts/character-sheet";
+import { frameSequenceSheetRequestSchema } from "@/lib/schemas";
+import { generateFrameSequenceSheetWithOpenAI } from "@/lib/openai/images";
+import { buildFrameSequenceSheetPrompt } from "@/lib/prompts/frame-sequence-sheet";
 import { requireUser } from "@/lib/auth/require-user";
 
 export const runtime = "nodejs";
@@ -14,17 +14,17 @@ export async function POST(req: Request) {
     if (auth.error) return auth.error;
 
     const json = await req.json();
-    const input = characterSheetRequestSchema.parse(json);
+    const input = frameSequenceSheetRequestSchema.parse(json);
     const normalizedRefUrls = (input.referenceImageUrls ?? []).map((url) =>
       url.trim().startsWith("/")
         ? new URL(url.trim(), req.url).toString()
         : url.trim(),
     );
-    const prompt = buildCharacterSheetPrompt({
+    const prompt = buildFrameSequenceSheetPrompt({
       ...input,
       referenceImageUrls: normalizedRefUrls,
     });
-    const { dataUrl, mimeType } = await generateCharacterSheetWithOpenAI({
+    const { dataUrl, mimeType } = await generateFrameSequenceSheetWithOpenAI({
       prompt,
       requestUrl: req.url,
       referenceImageUrls: normalizedRefUrls,
@@ -39,7 +39,9 @@ export async function POST(req: Request) {
       );
     }
     const message =
-      err instanceof Error ? err.message : "Failed to generate character sheet";
+      err instanceof Error
+        ? err.message
+        : "Failed to generate frame sequence sheet";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
