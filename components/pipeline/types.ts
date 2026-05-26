@@ -22,17 +22,7 @@ export type ReferenceImage = {
   originalName: string;
 };
 
-/** Reusable mascot identity persisted per user (refs + art direction + voice + saved sheet). */
-export type CharacterProfile = {
-  id: string;
-  name: string;
-  artDirection: string;
-  referenceImages: Array<{ id: string; url: string; originalName: string }>;
-  voiceSample: { url: string; mimeType: string; originalName: string } | null;
-  sheetUrl: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+export type { CharacterProfile } from "@/lib/schemas";
 
 export type Step = "topic" | "scripts" | "character" | "sheet" | "video";
 export type ScriptMode = "generate" | "manual";

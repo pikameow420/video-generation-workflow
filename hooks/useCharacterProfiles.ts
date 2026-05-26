@@ -2,9 +2,10 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback } from "react";
+import { toast } from "sonner";
 
-import type { CharacterProfile } from "@/components/pipeline/types";
-import { deleteJson, getJson, postForm, putForm } from "@/lib/api/client";
+import type { CharacterProfile } from "@/lib/schemas";
+import { deleteJson, getJson, postForm, putForm, putJson } from "@/lib/api/client";
 import {
   characterProfileListResponseSchema,
   characterProfileSchema,
@@ -22,6 +23,10 @@ export type UpdateCharacterProfilePayload = CreateCharacterProfilePayload & {
   removeVoiceSample: boolean;
 };
 
+type ProfileSubmitOptions = {
+  onSuccess?: (profile: CharacterProfile) => void;
+};
+
 /** Character profile list/create/delete API calls for the Character step. */
 export function useCharacterProfiles(options: {
   setCharacterProfiles: Dispatch<SetStateAction<CharacterProfile[]>>;
@@ -37,6 +42,16 @@ export function useCharacterProfiles(options: {
     payload: UpdateCharacterProfilePayload,
   ) => Promise<CharacterProfile>;
   deleteCharacterProfile: (id: string) => Promise<void>;
+  submitCreateProfile: (
+    input: CreateCharacterProfilePayload,
+    options?: ProfileSubmitOptions,
+  ) => Promise<boolean>;
+  submitUpdateProfile: (
+    id: string,
+    input: UpdateCharacterProfilePayload,
+    options?: ProfileSubmitOptions,
+  ) => Promise<boolean>;
+  saveProfileSheet: (id: string, imageDataUrl: string) => Promise<void>;
 } {
   const { setCharacterProfiles, setLoadingCharacterProfiles, setError } = options;
 
@@ -118,10 +133,111 @@ export function useCharacterProfiles(options: {
   const deleteCharacterProfile = useCallback(
     async (id: string) => {
       await deleteJson(
-        `/api/character-profiles?id=${encodeURIComponent(id)}`,
+        `/api/character-profiles/${encodeURIComponent(id)}`,
         "Failed to delete character profile",
       );
       setCharacterProfiles((prev) => prev.filter((item) => item.id !== id));
+    },
+    [setCharacterProfiles],
+  );
+
+  const submitCreateProfile = useCallback(
+    async (
+      input: CreateCharacterProfilePayload,
+      submitOptions?: ProfileSubmitOptions,
+    ): Promise<boolean> => {
+      const name = input.name.trim();
+      if (!name) {
+        toast.error("Profile name is required.");
+        return false;
+      }
+      if (!input.referenceImageIds.length) {
+        toast.error("Select at least one anchor reference image for the profile.");
+        return false;
+      }
+      try {
+        setError(null);
+        const created = await createCharacterProfile({
+          name,
+          artDirection: input.artDirection.trim(),
+          referenceImageIds: input.referenceImageIds,
+          voiceFile: input.voiceFile,
+        });
+        toast.success(`Character profile "${created.name}" saved.`);
+        submitOptions?.onSuccess?.(created);
+        return true;
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Could not create character profile";
+        setError(message);
+        toast.error(message);
+        return false;
+      }
+    },
+    [createCharacterProfile, setError],
+  );
+
+  const submitUpdateProfile = useCallback(
+    async (
+      id: string,
+      input: UpdateCharacterProfilePayload,
+      submitOptions?: ProfileSubmitOptions,
+    ): Promise<boolean> => {
+      const name = input.name.trim();
+      if (!name) {
+        toast.error("Profile name is required.");
+        return false;
+      }
+      if (!input.referenceImageIds.length) {
+        toast.error("Select at least one anchor reference image for the profile.");
+        return false;
+      }
+      try {
+        setError(null);
+        const updated = await updateCharacterProfile(id, {
+          name,
+          artDirection: input.artDirection.trim(),
+          referenceImageIds: input.referenceImageIds,
+          voiceFile: input.voiceFile,
+          removeVoiceSample: input.removeVoiceSample,
+        });
+        toast.success(`Character profile "${updated.name}" updated.`);
+        submitOptions?.onSuccess?.(updated);
+        return true;
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Could not update character profile";
+        setError(message);
+        toast.error(message);
+        return false;
+      }
+    },
+    [setError, updateCharacterProfile],
+  );
+
+  const saveProfileSheet = useCallback(
+    async (id: string, imageDataUrl: string) => {
+      try {
+        const updated = await putJson(
+          `/api/character-profiles/${encodeURIComponent(id)}/sheet`,
+          { imageDataUrl },
+          "Could not save the sheet to the profile",
+          characterProfileSchema,
+        );
+        setCharacterProfiles((prev) =>
+          prev.map((item) => (item.id === updated.id ? updated : item)),
+        );
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Could not save the sheet to the profile",
+        );
+      }
     },
     [setCharacterProfiles],
   );
@@ -131,5 +247,8 @@ export function useCharacterProfiles(options: {
     createCharacterProfile,
     updateCharacterProfile,
     deleteCharacterProfile,
+    submitCreateProfile,
+    submitUpdateProfile,
+    saveProfileSheet,
   };
 }
