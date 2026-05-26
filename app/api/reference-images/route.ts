@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z, ZodError } from "zod";
+import { parseErrorMessage } from "@/lib/api/errors";
 import {
   allowedReferenceImageMimeTypes,
   maxReferenceImageBytes,
@@ -19,16 +20,6 @@ const deleteQuerySchema = z.object({
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-function parseErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof ZodError) {
-    return err.issues.map((issue) => issue.message).join("; ");
-  }
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return fallback;
-}
 
 export async function GET() {
   try {

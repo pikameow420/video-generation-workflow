@@ -1,34 +1,19 @@
 import { NextResponse } from "next/server";
-import { z, ZodError } from "zod";
+import { ZodError } from "zod";
+import { parseErrorMessage } from "@/lib/api/errors";
 import {
   characterProfileListResponseSchema,
   createCharacterProfileFieldsSchema,
 } from "@/lib/schemas";
 import {
-  CharacterProfileNotFoundError,
   createCharacterProfile,
-  deleteCharacterProfile,
   listCharacterProfiles,
 } from "@/lib/character-profiles/store";
 import { readVoiceSampleFromForm } from "@/lib/character-profiles/voice-form";
 import { requireUser } from "@/lib/auth/require-user";
 
-const deleteQuerySchema = z.object({
-  id: z.uuid(),
-});
-
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-function parseErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof ZodError) {
-    return err.issues.map((issue) => issue.message).join("; ");
-  }
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return fallback;
-}
 
 export async function GET() {
   try {
@@ -89,34 +74,5 @@ export async function POST(req: Request) {
     const message = parseErrorMessage(err, "Failed to create character profile");
     const status = err instanceof ZodError ? 400 : 500;
     return NextResponse.json({ error: message }, { status });
-  }
-}
-
-export async function DELETE(req: Request) {
-  try {
-    const auth = await requireUser();
-    if (auth.error) return auth.error;
-
-    const url = new URL(req.url);
-    const parsed = deleteQuerySchema.safeParse({
-      id: url.searchParams.get("id"),
-    });
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues.map((issue) => issue.message).join("; ") },
-        { status: 400 },
-      );
-    }
-
-    await deleteCharacterProfile(parsed.data.id, auth.user.id);
-    return new NextResponse(null, { status: 204 });
-  } catch (err) {
-    if (err instanceof CharacterProfileNotFoundError) {
-      return NextResponse.json({ error: err.message }, { status: 404 });
-    }
-    return NextResponse.json(
-      { error: parseErrorMessage(err, "Failed to delete character profile") },
-      { status: 500 },
-    );
   }
 }

@@ -25,11 +25,13 @@ import { POST as videoPost } from "@/app/api/video/route";
 import { GET as videoStatusGet } from "@/app/api/video/status/route";
 import { GET as pipelineVideosGet } from "@/app/api/pipeline-videos/route";
 import {
-  DELETE as characterProfilesDelete,
   GET as characterProfilesGet,
   POST as characterProfilesPost,
 } from "@/app/api/character-profiles/route";
-import { PUT as characterProfileUpdatePut } from "@/app/api/character-profiles/[id]/route";
+import {
+  DELETE as characterProfileDelete,
+  PUT as characterProfileUpdatePut,
+} from "@/app/api/character-profiles/[id]/route";
 import { PUT as characterProfileSheetPut } from "@/app/api/character-profiles/[id]/sheet/route";
 import { POST as frameSequenceSheetPost } from "@/app/api/frame-sequence-sheet/route";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
@@ -318,14 +320,16 @@ describe("Security Boundaries", () => {
       expect(json.error).toBe("Unauthorized");
     });
 
-    it("DELETE /api/character-profiles without session returns 401", async () => {
+    it("DELETE /api/character-profiles/[id] without session returns 401", async () => {
       mockAuthForUser(null);
 
-      const req = createMockRequest(
-        "/api/character-profiles?id=11111111-1111-4111-8111-111111111111",
-        { method: "DELETE" },
-      );
-      const res = await characterProfilesDelete(req);
+      const profileId = "11111111-1111-4111-8111-111111111111";
+      const req = createMockRequest(`/api/character-profiles/${profileId}`, {
+        method: "DELETE",
+      });
+      const res = await characterProfileDelete(req, {
+        params: Promise.resolve({ id: profileId }),
+      });
       const json = await res.json();
 
       expect(res.status).toBe(401);
@@ -444,6 +448,27 @@ describe("Security Boundaries", () => {
         body: form,
       });
       const res = await characterProfileUpdatePut(req, {
+        params: Promise.resolve({ id: profileId }),
+      });
+
+      expect(res.status).toBe(404);
+      expect(eqUser).toHaveBeenCalledWith("user_id", mockUserB.id);
+    });
+
+    it("DELETE .../[id] on a profile owned by User A returns 404 for User B", async () => {
+      mockAuthForUser(mockUserB);
+
+      const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+      const eqUser = vi.fn().mockReturnValue({ maybeSingle });
+      const eqId = vi.fn().mockReturnValue({ eq: eqUser });
+      const select = vi.fn().mockReturnValue({ eq: eqId });
+      mockAdminClient(vi.fn().mockReturnValue({ select }));
+
+      const profileId = "44444444-4444-4444-8444-444444444444";
+      const req = createMockRequest(`/api/character-profiles/${profileId}`, {
+        method: "DELETE",
+      });
+      const res = await characterProfileDelete(req, {
         params: Promise.resolve({ id: profileId }),
       });
 

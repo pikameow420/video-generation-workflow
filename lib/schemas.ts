@@ -60,6 +60,7 @@ export const videoRequestSchema = z.object({
     .max(maxMuapiAudioFiles)
     .optional(),
 });
+export type VideoRequest = z.infer<typeof videoRequestSchema>;
 /** Returned immediately after POST /api/video starts a provider job. */
 export const videoStartResponseSchema = z.object({
   predictionId: z.string().min(1),
@@ -165,6 +166,8 @@ export const characterProfileReferenceSchema = z.object({
   originalName: z.string(),
 });
 
+export type CharacterProfileReference = z.infer<typeof characterProfileReferenceSchema>;
+
 export const characterProfileSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -182,6 +185,8 @@ export const characterProfileSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+export type CharacterProfile = z.infer<typeof characterProfileSchema>;
 
 export const characterProfileListResponseSchema = z.object({
   items: z.array(characterProfileSchema),
