@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  FreeVideoModal,
+  hasSeenFreeVideoNotice,
+  markFreeVideoNoticeSeen,
+} from "@/components/auth/FreeVideoModal";
 
 import { ScriptHistorySidebar } from "@/components/pipeline/ScriptHistorySidebar";
 import type {
@@ -41,6 +47,7 @@ import { useWizardPendingVideoJob } from "@/hooks/useWizardPendingVideoJob";
 import { usePipelineVideoStored } from "@/hooks/usePipelineVideoStored";
 import { useWizardLocalStorage } from "@/hooks/useWizardLocalStorage";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useVideoQuota } from "@/hooks/useVideoQuota";
 import { toast } from "sonner";
 
 export function PipelineWizard() {
@@ -91,17 +98,19 @@ export function PipelineWizard() {
   const [pendingVideoJob, setPendingVideoJob] = useState<PendingVideoJob | null>(
     null,
   );
-  /** True only during `/api/video` — SheetStep uses this instead of shared `busy` for the primary CTA label. */
   const [videoGenerationBusy, setVideoGenerationBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [freeVideoNoticeOpen, setFreeVideoNoticeOpen] = useState(false);
+  const [freeVideoLimitOpen, setFreeVideoLimitOpen] = useState(false);
+  const pendingStartAfterNotice = useRef(false);
 
   useAuthGuard(useCallback(() => {
     if (pendingVideoJob !== null) {
       setPendingVideoJob(null);
       setVideoStatus("");
       setVideoGenerationBusy(false);
-      toast.info("User changed - video generation job cleared");
+      toast.info("Signed in as a different user—the in-progress video was cleared.");
     }
   }, [pendingVideoJob]));
 
@@ -118,6 +127,10 @@ export function PipelineWizard() {
     videoProviderEnv,
     videoBackendReady,
   } = usePipelineVideoProvider(clearMuapiAudio);
+
+  const videoQuota = useVideoQuota(step === "sheet" || step === "video");
+  const canStartVideoWithQuota =
+    videoBackendReady && !videoQuota.loading && videoQuota.canStart;
 
   const runApiAction = useApiAction({
     onError: (message) => {
@@ -178,11 +191,6 @@ export function PipelineWizard() {
   const isCharacterDone = step === "sheet" || step === "video";
   const isSheetDone = step === "video";
 
-  /**
-   * The sheet and video are derived from the script + character inputs. Whenever
-   * those inputs change, the previously generated outputs are stale: drop them and
-   * pull the user back to the Character step if they were sitting on an output step.
-   */
   const invalidateGeneratedOutputs = useCallback(() => {
     setSheetUrl(null);
     setSheetSource("generated");
@@ -335,7 +343,7 @@ export function PipelineWizard() {
       if (!stepStates[next].accessible) return;
 
       if (busy) {
-        toast.message("Wait for the current request before changing steps.");
+        toast.message("Finish the current step before switching.");
         return;
       }
 
@@ -538,7 +546,31 @@ export function PipelineWizard() {
     setVideoStatus,
     setPendingVideoJob,
     setVideoMeta,
+    onQuotaLimit: () => setFreeVideoLimitOpen(true),
+    onVideoStarted: () => void videoQuota.refresh(),
   });
+
+  const requestStartVideo = useCallback(() => {
+    if (videoQuota.loading) return;
+    if (!videoQuota.canStart) {
+      setFreeVideoLimitOpen(true);
+      return;
+    }
+    if (!videoQuota.exempt && videoQuota.used === 0 && !hasSeenFreeVideoNotice()) {
+      pendingStartAfterNotice.current = true;
+      setFreeVideoNoticeOpen(true);
+      return;
+    }
+    void startVideo();
+  }, [startVideo, videoQuota]);
+
+  useEffect(() => {
+    if (step !== "sheet" || !sheetUrl || videoQuota.loading) return;
+    if (videoQuota.exempt || videoQuota.used !== 0 || hasSeenFreeVideoNotice()) {
+      return;
+    }
+    setFreeVideoNoticeOpen(true);
+  }, [step, sheetUrl, videoQuota.exempt, videoQuota.loading, videoQuota.used]);
 
   const onStartNewRun = useCallback(() => {
     const hasInFlightJob =
@@ -548,7 +580,7 @@ export function PipelineWizard() {
 
     if (hasInFlightJob) {
       const ok = window.confirm(
-        "A video is still generating or processing. Start a new run anyway? This job will no longer be tracked in the wizard.",
+        "A video is still processing. Start fresh anyway? The current job will stop showing in this wizard.",
       );
       if (!ok) return;
     }
@@ -561,7 +593,7 @@ export function PipelineWizard() {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(WIZARD_STORAGE_KEY);
     }
-    toast.success("Ready for a new video.");
+    toast.success("Cleared—ready for a new video.");
   }, [
     busy,
     clearMuapiAudio,
@@ -660,9 +692,9 @@ export function PipelineWizard() {
         />
       ) : (
         <WizardSummaryCard
-          title={scriptMode === "manual" ? "Manual Script Mode" : "Topic Defined"}
+          title={scriptMode === "manual" ? "Your script" : "Topic set"}
           detail={
-            scriptMode === "manual" ? scriptEdit.title || "Custom script entry" : topic
+            scriptMode === "manual" ? scriptEdit.title || "Pasted or uploaded" : topic
           }
           onEdit={() => navigateToStep("topic")}
         />
@@ -682,8 +714,8 @@ export function PipelineWizard() {
         />
       ) : isScriptsDone && scriptEdit.body.trim() ? (
         <WizardSummaryCard
-          title="Script Selected"
-          detail={scriptEdit.title || "Untitled script"}
+          title="Script ready"
+          detail={scriptEdit.title || "Untitled"}
           onEdit={() => navigateToStep("scripts")}
         />
       ) : null}
@@ -728,11 +760,11 @@ export function PipelineWizard() {
         />
       ) : isCharacterDone && scriptEdit.body.trim() ? (
         <WizardSummaryCard
-          title="Character Ready"
+          title="Character set"
           detail={
             selectedCharacterProfile
               ? selectedCharacterProfile.name
-              : "One-off run (no profile)"
+              : "One-time run"
           }
           onEdit={() => navigateToStep("character")}
         />
@@ -748,7 +780,7 @@ export function PipelineWizard() {
           videoProviderEnvLoaded={videoProviderEnv.loaded}
           atlasConfigured={videoProviderEnv.atlasConfigured}
           muapiConfigured={videoProviderEnv.muapiConfigured}
-          canStartVideo={videoBackendReady}
+          canStartVideo={canStartVideoWithQuota}
           videoGenerationBusy={videoGenerationBusy || Boolean(pendingVideoJob)}
           muapiAudioFileNames={muapiAudioFileNames}
           profileVoiceName={
@@ -758,7 +790,7 @@ export function PipelineWizard() {
           }
           onMuapiAudioFilesChange={onMuapiAudioFilesChange}
           onClearMuapiAudio={clearMuapiAudio}
-          onStartVideo={() => void startVideo()}
+          onStartVideo={requestStartVideo}
           onRegenerate={() =>
             sheetSource === "uploaded"
               ? navigateToStep("character")
@@ -767,8 +799,8 @@ export function PipelineWizard() {
         />
       ) : isSheetDone && sheetUrl ? (
         <WizardSummaryCard
-          title="Frame Sequence Sheet Ready"
-          detail="Ready for video generation"
+          title="Visual sheet ready"
+          detail="Ready to export your 15s video"
           thumbnailUrl={sheetUrl}
           onEdit={() => navigateToStep("sheet")}
         />
@@ -787,7 +819,7 @@ export function PipelineWizard() {
           videoHasCaptions={videoHasCaptions}
           videoMeta={videoMeta}
           videoStoredInLibrary={videoStoredInLibrary}
-          onStartVideo={() => void startVideo()}
+          onStartVideo={requestStartVideo}
           onStartNewRun={onStartNewRun}
           onGoTopic={() => navigateToStep("topic")}
           onGenerateSubtitles={() => void generateSubtitles()}
@@ -814,6 +846,28 @@ export function PipelineWizard() {
         }}
         onApplyHistoryScript={applyScriptFromHistory}
         onExpandedHistoryIdChange={setExpandedHistoryId}
+      />
+
+      <FreeVideoModal
+        open={freeVideoNoticeOpen}
+        variant="notice"
+        onClose={() => {
+          markFreeVideoNoticeSeen();
+          pendingStartAfterNotice.current = false;
+          setFreeVideoNoticeOpen(false);
+        }}
+        onContinue={() => {
+          markFreeVideoNoticeSeen();
+          if (pendingStartAfterNotice.current) {
+            pendingStartAfterNotice.current = false;
+            void startVideo();
+          }
+        }}
+      />
+      <FreeVideoModal
+        open={freeVideoLimitOpen}
+        variant="limit"
+        onClose={() => setFreeVideoLimitOpen(false)}
       />
       </div>
     </div>

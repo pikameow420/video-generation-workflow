@@ -37,7 +37,7 @@ type CharacterSnapshotFields = Pick<
   | "selectedReferenceUrls"
 >;
 
-export type AdvanceToSheet = (args: {
+type AdvanceToSheet = (args: {
   sheetUrl: string;
   sheetSource: "generated" | "uploaded";
   trackHistory?: boolean;
@@ -52,7 +52,6 @@ type UseWizardCharacterStepOptions = {
   advanceToSheet: AdvanceToSheet;
 };
 
-/** Character step state, run overrides, and CRUD for the pipeline wizard. */
 export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
   const {
     invalidateGeneratedOutputs,
@@ -131,7 +130,6 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
     [],
   );
 
-  /** After a localStorage restore, the selected profile's refs/voice live server-side — fetch once. */
   const attemptedProfileRestore = useRef(false);
   useEffect(() => {
     if (attemptedProfileRestore.current) return;
@@ -161,7 +159,7 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
       const profile = characterProfiles.find((item) => item.id === id);
       if (!profile) return;
       applyCharacterProfile(profile);
-      toast.success(`Using character profile "${profile.name}".`);
+      toast.success(`Character "${profile.name}" is active.`);
     },
     [applyCharacterProfile, characterProfiles, invalidateGeneratedOutputs],
   );
@@ -229,7 +227,7 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
           setSelectedCharacterProfileId(null);
           setRunOverrides({});
         }
-        toast.success(`Character profile "${profile.name}" deleted.`);
+        toast.success(`Character "${profile.name}" deleted.`);
       }, "Delete failed");
     },
     [
@@ -248,7 +246,7 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
       sheetSource: "generated",
       trackHistory: true,
     });
-    toast.success("Reusing the profile's saved frame sequence sheet.");
+    toast.success("Loaded this character's saved visual sheet.");
   }, [advanceToSheet, selectedCharacterProfile]);
 
   const saveSheetToSelectedProfile = useCallback(
@@ -271,7 +269,7 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
       e.currentTarget.value = "";
       if (!file) return;
 
-      toast.info("Uploading reference image...");
+      toast.info("Uploading reference…");
       await runApiAction(async () => {
         const formData = new FormData();
         formData.set("file", file);
@@ -291,7 +289,7 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
           ]),
         }));
         await loadReferenceImages();
-        toast.success("Reference image uploaded.");
+        toast.success("Reference added to your library.");
       }, "Upload failed");
     },
     [
@@ -345,7 +343,7 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
           };
         });
         await loadReferenceImages();
-        toast.success("Reference removed from library.");
+        toast.success("Reference removed.");
       }, "Delete failed");
     },
     [

@@ -56,11 +56,11 @@ export type WizardStepMeta = {
 };
 
 export const WIZARD_STEPS: readonly WizardStepMeta[] = [
-  { id: "topic", label: "Pick Topic", shortLabel: "Topic" },
-  { id: "scripts", label: "Choose Script", shortLabel: "Scripts" },
-  { id: "character", label: "Character Profile", shortLabel: "Character" },
-  { id: "sheet", label: "Frame Sequence Sheet", shortLabel: "Sheet" },
-  { id: "video", label: "Generate Video", shortLabel: "Video" },
+  { id: "topic", label: "Topic & brief", shortLabel: "Topic" },
+  { id: "scripts", label: "Script", shortLabel: "Script" },
+  { id: "character", label: "Character", shortLabel: "Character" },
+  { id: "sheet", label: "Visual sheet", shortLabel: "Sheet" },
+  { id: "video", label: "Video", shortLabel: "Video" },
 ] as const;
 
 export type WizardStepUiState = {
@@ -136,7 +136,7 @@ export function getWizardStepStates(
     : {
         accessible: false,
         complete: false,
-        disabledReason: "Enter a topic or script first",
+        disabledReason: "Add a topic or paste a script first",
       };
 
   const characterState: WizardStepUiState = hasScriptBody
@@ -147,7 +147,7 @@ export function getWizardStepStates(
     : {
         accessible: false,
         complete: false,
-        disabledReason: "Choose a script first",
+        disabledReason: "Finish the script step first",
       };
 
   const sheetState: WizardStepUiState = sheetUrl
@@ -158,7 +158,7 @@ export function getWizardStepStates(
     : {
         accessible: false,
         complete: false,
-        disabledReason: "Generate or reuse a frame sequence sheet first",
+        disabledReason: "Create a visual sheet first",
       };
 
   const videoState: WizardStepUiState = sheetUrl
@@ -169,7 +169,7 @@ export function getWizardStepStates(
     : {
         accessible: false,
         complete: false,
-        disabledReason: "Complete the frame sequence sheet step first",
+        disabledReason: "Complete the visual sheet step first",
       };
 
   return {
@@ -221,7 +221,6 @@ export type CharacterRunOverrides = {
   referenceUrls?: string[];
 };
 
-/** Effective reference URLs for this run (overrides, else profile anchors). */
 export function resolveRunReferenceUrls(
   overrides: CharacterRunOverrides | undefined,
   profile: CharacterProfile | null,
@@ -248,7 +247,6 @@ export function buildRunOverridesFromSnapshot(loaded: {
   return overrides;
 }
 
-/** Download a profile voice sample URL and return a normalized data URL. */
 export async function fetchVoiceSampleDataUrl(voice: {
   url: string;
   mimeType: string;

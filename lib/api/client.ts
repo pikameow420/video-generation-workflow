@@ -3,7 +3,20 @@ import { z } from "zod";
 type ApiErrorShape = {
   error?: string;
   message?: string;
+  code?: string;
 };
+
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+  }
+}
 
 async function readJson<T>(res: Response): Promise<T | null> {
   try {
@@ -48,7 +61,11 @@ export async function getJson<T>(
   const res = await fetch(url, { method: "GET" });
   const parsed = await readJson<T & ApiErrorShape>(res);
   if (!res.ok) {
-    throw new Error(resolveErrorMessage(parsed, fallbackError));
+    throw new ApiRequestError(
+      resolveErrorMessage(parsed, fallbackError),
+      res.status,
+      parsed?.code,
+    );
   }
   return parseWithSchema(parsed, schema, fallbackError);
 }
@@ -66,7 +83,11 @@ export async function postJson<T>(
   });
   const parsed = await readJson<T & ApiErrorShape>(res);
   if (!res.ok) {
-    throw new Error(resolveErrorMessage(parsed, fallbackError));
+    throw new ApiRequestError(
+      resolveErrorMessage(parsed, fallbackError),
+      res.status,
+      parsed?.code,
+    );
   }
   return parseWithSchema(parsed, schema, fallbackError);
 }

@@ -54,7 +54,7 @@ export function SheetStep({
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
             4
           </div>
-          <CardTitle className="text-xl">Review Frame Sequence Sheet</CardTitle>
+          <CardTitle className="text-xl">Review your visual sheet</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="space-y-5 pb-6">
@@ -62,7 +62,7 @@ export function SheetStep({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={sheetUrl}
-            alt="Frame sequence sheet reference"
+            alt="Visual reference sheet for the video"
             className="max-h-[400px] w-full object-contain"
           />
         </div>
@@ -70,7 +70,7 @@ export function SheetStep({
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:items-center">
           {videoProviderEnvLoaded ? (
             <label className="flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-              Video backend
+              Video quality
               <select
                 value={videoProvider}
                 disabled={busy}
@@ -88,7 +88,7 @@ export function SheetStep({
               </select>
             </label>
           ) : (
-            <span className="text-xs text-zinc-400">Loading video backends…</span>
+            <span className="text-xs text-zinc-400">Loading video options…</span>
           )}
           <Button
             type="button"
@@ -98,10 +98,10 @@ export function SheetStep({
           >
             {videoGenerationBusy ? (
               <>
-                <Spinner className="mr-2 h-4 w-4" /> Starting video…
+                <Spinner className="mr-2 h-4 w-4" /> Starting export…
               </>
             ) : (
-              "Generate 15s Video"
+              "Create 15s video"
             )}
           </Button>
           <Button
@@ -117,36 +117,33 @@ export function SheetStep({
                 {sheetSource === "uploaded" ? "Opening…" : "Regenerating…"}
               </>
             ) : sheetSource === "uploaded" ? (
-              "Replace Reference"
+              "Change reference"
             ) : (
-              "Regenerate Image"
+              "Regenerate sheet"
             )}
           </Button>
         </div>
 
         <p className="text-xs text-zinc-500">
           {videoProvider === "muapi"
-            ? "720p · Optional MP3/WAV voice reference (up to 3 files, ≤15s total per MuAPI)."
-            : "480p"}
+            ? "HD (720p) · Optional voice clips as MP3 or WAV (up to 3 files, 15 seconds total)."
+            : "Standard (480p) · Fast export using your visual sheet."}
         </p>
 
         {videoProvider === "muapi" && muapiConfigured ? (
           <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/20">
             <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">
-              Voice reference (optional)
+              Voice (optional, HD only)
             </p>
             {profileVoiceName && !muapiAudioFileNames.length ? (
               <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                Your character profile&apos;s voice sample{" "}
-                <span className="font-medium">{profileVoiceName}</span> will be used as{" "}
-                <span className="font-mono text-zinc-700 dark:text-zinc-300">@audio1</span>
-                . Add files below to override it for this run.
+                Using saved voice{" "}
+                <span className="font-medium">{profileVoiceName}</span> from your
+                character. Upload clips below to override for this run.
               </p>
             ) : (
               <p className="text-xs text-zinc-500">
-                Upload up to 3 clips. The prompt uses{" "}
-                <span className="font-mono text-zinc-700 dark:text-zinc-300">@audio1</span>{" "}
-                as the voice reference (and @audio2, @audio3 when you add more).
+                Add up to 3 short clips (MP3 or WAV) to steer narration on HD exports.
               </p>
             )}
             <div className="flex flex-wrap items-center gap-2">
@@ -159,7 +156,7 @@ export function SheetStep({
                   disabled={busy}
                   onChange={onMuapiAudioFilesChange}
                 />
-                Add audio samples
+                Add voice clips
               </label>
               {muapiAudioFileNames.length ? (
                 <Button

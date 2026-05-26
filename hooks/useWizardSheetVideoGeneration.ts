@@ -8,7 +8,8 @@ import type {
   PendingVideoJob,
   Step,
 } from "@/components/pipeline/types";
-import { postJson } from "@/lib/api/client";
+import { ApiRequestError, postJson } from "@/lib/api/client";
+import { FREE_VIDEO_LIMIT_REACHED } from "@/lib/auth/video-quota-policy";
 import type { RunApiAction } from "@/hooks/useApiAction";
 import type { VideoProvider, VideoRequest } from "@/lib/schemas";
 import {
@@ -43,6 +44,9 @@ type UseWizardSheetVideoGenerationOptions = {
   setVideoStatus: Dispatch<SetStateAction<string>>;
   setPendingVideoJob: Dispatch<SetStateAction<PendingVideoJob | null>>;
   setVideoMeta: Dispatch<SetStateAction<{ predictionId: string } | null>>;
+
+  onQuotaLimit: () => void;
+  onVideoStarted?: () => void;
 };
 
 export function useWizardSheetVideoGeneration(
@@ -72,10 +76,12 @@ export function useWizardSheetVideoGeneration(
     setVideoStatus,
     setPendingVideoJob,
     setVideoMeta,
+    onQuotaLimit,
+    onVideoStarted,
   } = options;
 
   const generateSheet = useCallback(async () => {
-    toast.info("Generating frame sequence sheet...");
+    toast.info("Creating your visual sheet…");
     await runApiAction(async () => {
       await maybeSaveGeneratedScript();
       const data = await postJson(
@@ -95,7 +101,7 @@ export function useWizardSheetVideoGeneration(
       setSheetSource("generated");
       trackSheetScriptSelection();
       setStep("sheet");
-      toast.success("Frame sequence sheet generated.");
+      toast.success("Visual sheet is ready.");
       await saveSheetToSelectedProfile(data.imageDataUrl);
     }, "Request failed");
   }, [
@@ -113,7 +119,7 @@ export function useWizardSheetVideoGeneration(
 
   const startVideo = useCallback(async () => {
     if (!sheetUrl) return;
-    toast.info("Preparing references and starting video job...");
+    toast.info("Starting your 15s video export…");
     await runApiAction(async () => {
       setVideoGenerationBusy(true);
       let jobStarted = false;
@@ -121,7 +127,7 @@ export function useWizardSheetVideoGeneration(
         setSubtitleSrt("");
         setSubtitleChars(null);
         setSubtitleVideoDurationSec(null);
-        setVideoStatus("Starting video job…");
+        setVideoStatus("Starting export…");
         setStep("video");
         let audioDataUrls: string[] | undefined;
         if (videoProvider === "muapi" && muapiAudioDataUrls.length > 0) {
@@ -143,12 +149,24 @@ export function useWizardSheetVideoGeneration(
           provider: videoProvider,
           ...(audioDataUrls ? { audioDataUrls } : {}),
         };
-        const data = await postJson(
-          "/api/video",
-          payload,
-          "Video failed",
-          videoStartResponseSchema,
-        );
+        let data;
+        try {
+          data = await postJson(
+            "/api/video",
+            payload,
+            "Video failed",
+            videoStartResponseSchema,
+          );
+        } catch (err) {
+          if (
+            err instanceof ApiRequestError &&
+            err.code === FREE_VIDEO_LIMIT_REACHED
+          ) {
+            onQuotaLimit();
+            return;
+          }
+          throw err;
+        }
         const trimmedTitle = scriptEdit.title.trim().slice(0, 200);
         const job: PendingVideoJob = {
           predictionId: data.predictionId,
@@ -158,13 +176,16 @@ export function useWizardSheetVideoGeneration(
         };
         setPendingVideoJob(job);
         setVideoMeta({ predictionId: data.predictionId });
-        setVideoStatus("Generating video…");
+        setVideoStatus("Rendering your video…");
         jobStarted = true;
+        onVideoStarted?.();
       } finally {
         if (!jobStarted) setVideoGenerationBusy(false);
       }
     }, "Request failed");
   }, [
+    onQuotaLimit,
+    onVideoStarted,
     fetchProfileVoiceDataUrl,
     muapiAudioDataUrls,
     runApiAction,

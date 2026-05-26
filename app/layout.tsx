@@ -20,9 +20,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Social — Script to video",
+  title: "AI Social — Ideas to short videos",
   description:
-    "Generate scripts, a frame sequence sheet, and a Seedance video",
+    "Write or generate a script, build a visual reference sheet, and export a 15-second social video.",
 };
 
 export default function RootLayout({
@@ -50,13 +50,13 @@ export default function RootLayout({
                   href="/"
                   className="text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                 >
-                  Pipeline
+                  Create
                 </Link>
                 <Link
                   href="/library"
                   className="text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                 >
-                  Library
+                  My videos
                 </Link>
                 <AuthHeaderActions />
               </nav>

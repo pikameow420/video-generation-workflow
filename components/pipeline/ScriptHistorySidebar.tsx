@@ -50,7 +50,7 @@ export function ScriptHistorySidebar({
         onClick={onToggle}
         className="rounded-full bg-white shadow-sm dark:bg-zinc-950"
       >
-        {isOpen ? "Hide Scripts" : "Show Scripts"}
+        {isOpen ? "Hide scripts" : "Script history"}
       </Button>
 
       {isOpen ? (
@@ -58,10 +58,10 @@ export function ScriptHistorySidebar({
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                Script History
+                Script history
               </h3>
               <p className="mt-0.5 text-[11px] text-zinc-500">
-                First script visible, alternates tucked below.
+                Reopen past scripts from this session or your library.
               </p>
             </div>
             <Button
@@ -83,7 +83,7 @@ export function ScriptHistorySidebar({
               onClick={onRefresh}
               className="w-full rounded-lg"
             >
-              Load previous scripts
+              Load saved scripts
             </Button>
           ) : null}
 
@@ -104,7 +104,7 @@ export function ScriptHistorySidebar({
                         {currentBatchPrimaryScript.body}
                       </p>
                       <span className="mt-2 inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800">
-                        Current batch
+                        Latest batch
                       </span>
                     </button>
                     {currentBatchRemainingScripts.length ? (
@@ -163,7 +163,7 @@ export function ScriptHistorySidebar({
                           {item.selectedScript.body}
                         </p>
                         <span className="mt-2 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                          Sheet generated
+                          Has visual sheet
                         </span>
                       </button>
                       {item.remainingScripts.length ? (
@@ -206,8 +206,8 @@ export function ScriptHistorySidebar({
               </div>
             ) : savedScriptsLoaded && !loadingSavedScripts ? (
               <p className="text-xs text-zinc-500">
-                No script has completed sheet generation yet. Generate a batch to see the
-                first script here.
+                Scripts appear here after you generate a visual sheet. Run the pipeline
+                once to build your history.
               </p>
             ) : null}
           </ScrollArea>

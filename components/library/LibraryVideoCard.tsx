@@ -29,7 +29,7 @@ export function LibraryVideoCard({
   const onDelete = () => {
     if (
       !window.confirm(
-        "Remove this video from the library? It will be hidden (marked deleted in the database; the file is not removed).",
+        "Remove this video from My videos? It will disappear from your list but may still exist in storage.",
       )
     ) {
       return;
@@ -41,7 +41,7 @@ export function LibraryVideoCard({
             `/api/pipeline-videos?id=${encodeURIComponent(id)}`,
             "Could not remove video",
           );
-          toast.success("Removed from library");
+          toast.success("Video removed");
           router.refresh();
         } catch (e) {
           toast.error(e instanceof Error ? e.message : "Remove failed");

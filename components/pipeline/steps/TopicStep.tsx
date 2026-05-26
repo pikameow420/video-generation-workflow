@@ -61,10 +61,10 @@ function TopicBasePromptCollapsible(props: {
       >
         <div className="min-w-0">
           <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Base Prompt
+            Style guide (always on)
           </p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Persistent instructions (merged when generating scripts)
+            Applied every time you generate scripts from a topic
           </p>
           {!expanded && basePrompt.trim() ? (
             <p className="mt-1 truncate text-xs italic text-zinc-500 dark:text-zinc-400">
@@ -81,7 +81,7 @@ function TopicBasePromptCollapsible(props: {
       {expanded ? (
         <div className="space-y-1.5 border-t border-zinc-200 p-4 dark:border-zinc-800">
           <Label htmlFor="base-prompt-input" className="sr-only">
-            Base Prompt (Persistent instructions)
+            Style guide
           </Label>
           <Textarea
             id="base-prompt-input"
@@ -117,10 +117,10 @@ function TopicPresetsCollapsible(props: {
       >
         <div className="min-w-0">
           <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Saved presets ({presets.length})
+            Topic presets ({presets.length})
           </p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Save this topic bundle or load one you&apos;ve saved before.
+            Reuse a topic, tone, and audience combo you have saved before.
           </p>
         </div>
         <ChevronDown
@@ -132,7 +132,7 @@ function TopicPresetsCollapsible(props: {
         <div className="space-y-3 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
           {presets.length === 0 ? (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              No presets yet—use the fields below and save current as a preset.
+              No presets yet—fill in the fields below, then save the bundle.
             </p>
           ) : (
             <ul className="space-y-2">
@@ -193,7 +193,7 @@ function TopicPresetsCollapsible(props: {
                 setNewName("");
               }}
             >
-              Save current
+              Save preset
             </Button>
           </div>
         </div>
@@ -239,7 +239,7 @@ export function TopicStep({
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
             1
           </div>
-          <CardTitle className="text-xl">What is this video about?</CardTitle>
+          <CardTitle className="text-xl">What should this video be about?</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 pb-6">
@@ -250,7 +250,7 @@ export function TopicStep({
             variant={scriptMode === "generate" ? "default" : "outline"}
             className="rounded-full"
           >
-            Generate Scripts
+            Generate from topic
           </Button>
           <Button
             type="button"
@@ -261,7 +261,7 @@ export function TopicStep({
             variant={scriptMode === "manual" ? "default" : "outline"}
             className="rounded-full"
           >
-            Use My Own Script
+            I already have a script
           </Button>
         </div>
 
@@ -320,7 +320,7 @@ export function TopicStep({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="brand-kit-input">Brand kit</Label>
+              <Label htmlFor="brand-kit-input">Brand voice</Label>
               <Textarea
                 id="brand-kit-input"
                 className="min-h-[100px]"
@@ -330,7 +330,7 @@ export function TopicStep({
                 maxLength={8000}
               />
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Applied when you generate scripts—kept separate from the Base Prompt below.
+                Used for script generation only—separate from your always-on style guide below.
               </p>
             </div>
 
@@ -347,10 +347,10 @@ export function TopicStep({
             >
               {busy ? (
                 <>
-                  <Spinner className="mr-2 h-4 w-4" /> Generating Scripts...
+                  <Spinner className="mr-2 h-4 w-4" /> Writing scripts…
                 </>
               ) : (
-                "Generate 4 Scripts"
+                "Generate 4 script options"
               )}
             </Button>
           </>
@@ -407,7 +407,7 @@ export function TopicStep({
                 checked={saveManualScript}
                 onChange={(e) => onSaveManualScriptChange(e.target.checked)}
               />
-              Save this script to library
+              Save to my scripts
             </label>
             <Button
               type="button"
@@ -420,7 +420,7 @@ export function TopicStep({
                   <Spinner className="mr-2 h-4 w-4" /> Continuing...
                 </>
               ) : (
-                "Continue to Script Review"
+                "Continue to script"
               )}
             </Button>
           </div>

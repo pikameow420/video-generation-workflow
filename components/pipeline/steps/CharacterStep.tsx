@@ -20,7 +20,7 @@ export function CharacterStep({ busy, library, runSetup }: CharacterStepProps) {
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
             3
           </div>
-          <CardTitle className="text-xl">Pick or create a character</CardTitle>
+          <CardTitle className="text-xl">Set up your character</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="space-y-5 pb-6">

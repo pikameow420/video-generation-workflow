@@ -50,11 +50,11 @@ export function CharacterRunSetup({
     <>
       <div className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-          This Run
+          This run
         </p>
         <div className="space-y-1.5">
           <Label htmlFor="art-direction-input">
-            Art Direction for Visuals (Optional)
+            Visual style (optional)
           </Label>
           <Input
             id="art-direction-input"
@@ -63,14 +63,14 @@ export function CharacterRunSetup({
             placeholder="e.g. flat vector mascot, soft 3D, cyberpunk palette"
           />
           <p className="text-xs text-zinc-500">
-            Image generation is billed separately.
+            Shapes how your visual sheet is drawn (separate from video export).
           </p>
         </div>
         <div className="space-y-2">
-          <Label>Reference Photos For This Run</Label>
+          <Label>Reference images for this run</Label>
           <p className="text-xs text-zinc-500">
-            Selected references steer frame sequence sheet generation only. Video uses
-            the sheet from the next step.
+            These guide the visual sheet in the next step. The final video uses that
+            sheet, not the raw photos.
           </p>
           <ReferenceLibraryPicker
             busy={busy}
@@ -85,7 +85,7 @@ export function CharacterRunSetup({
           {selectedReferenceUrls.length ? (
             <div className="space-y-2">
               <p className="text-xs text-zinc-500">
-                Selected references (remove individually):
+                Selected for this run (tap to remove):
               </p>
               <div className="flex flex-wrap gap-2">
                 {selectedReferenceUrls.map((url) => {
@@ -117,7 +117,7 @@ export function CharacterRunSetup({
               disabled={busy || !selectedReferenceUrls.length}
               className="rounded-full"
             >
-              Use Selected Reference For Video
+              Skip sheet — use photo for video
             </Button>
             {selectedReferenceUrls.length ? (
               <span className="text-xs text-zinc-500">
@@ -135,8 +135,8 @@ export function CharacterRunSetup({
               disabled={busy}
               onChange={(e) => onUseProfileVoiceChange(e.target.checked)}
             />
-            Use this profile&apos;s voice sample (
-            {selectedProfile.voiceSample.originalName}) as @audio1 in the video
+            Attach profile voice (
+            {selectedProfile.voiceSample.originalName}) for HD video export
           </label>
         ) : null}
       </div>
@@ -150,10 +150,10 @@ export function CharacterRunSetup({
         >
           {busy ? (
             <>
-              <Spinner className="mr-2 h-4 w-4" /> Generating Art...
+              <Spinner className="mr-2 h-4 w-4" /> Building visual sheet…
             </>
           ) : (
-            "Generate Frame Sequence Sheet"
+            "Generate visual sheet"
           )}
         </Button>
         {selectedProfile?.sheetUrl ? (
@@ -164,7 +164,7 @@ export function CharacterRunSetup({
             onClick={onReuseProfileSheet}
             className="rounded-full"
           >
-            Reuse Saved Sheet
+            Use saved sheet
           </Button>
         ) : null}
       </div>

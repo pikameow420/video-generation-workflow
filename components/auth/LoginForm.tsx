@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { isVideoQuotaExempt } from "@/lib/auth/video-quota-policy";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "sign-in" | "sign-up";
@@ -26,9 +28,16 @@ export function LoginForm() {
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  function switchMode(next: AuthMode) {
+    setMode(next);
+    setError(null);
+    setMessage(null);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,8 +74,11 @@ export function LoginForm() {
         return;
       }
 
+      const freeTierNote = isVideoQuotaExempt(email)
+        ? ""
+        : " After you sign in, you will have one free 15-second video export.";
       setMessage(
-        "Account created. Check your email to confirm, then sign in.",
+        `You are almost there—confirm your email if prompted, then sign in.${freeTierNote}`,
       );
       setMode("sign-in");
     } catch {
@@ -78,15 +90,42 @@ export function LoginForm() {
 
   return (
     <Card className="w-full max-w-md rounded-2xl border-zinc-200 shadow-sm dark:border-zinc-800">
-      <CardHeader className="space-y-1">
+      <CardHeader className="space-y-3">
+        <div
+          className="grid grid-cols-2 gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900"
+          role="tablist"
+          aria-label="Authentication mode"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "sign-in"}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              mode === "sign-in"
+                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+            }`}
+            onClick={() => switchMode("sign-in")}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "sign-up"}
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              mode === "sign-up"
+                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+            }`}
+            onClick={() => switchMode("sign-up")}
+          >
+            Sign up
+          </button>
+        </div>
         <CardTitle className="text-xl">
-          {mode === "sign-in" ? "Sign in" : "Create account"}
+          {mode === "sign-in" ? "Welcome back" : "Create your account"}
         </CardTitle>
-        <CardDescription>
-          {mode === "sign-in"
-            ? "Use your Supabase account to access the pipeline and library."
-            : "Register with email and password. Confirmation may be required."}
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
@@ -103,19 +142,39 @@ export function LoginForm() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete={
-                mode === "sign-in" ? "current-password" : "new-password"
-              }
-              required
-              minLength={6}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="••••••••"
-            />
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="password">Password</Label>
+              {mode === "sign-up" ? (
+                <span className="text-xs text-zinc-500">At least 6 characters</span>
+              ) : null}
+            </div>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete={
+                  mode === "sign-in" ? "current-password" : "new-password"
+                }
+                required
+                minLength={6}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowPassword((prev) => !prev)}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           {error ? (
@@ -138,21 +197,6 @@ export function LoginForm() {
                 : "Create account"}
           </Button>
         </form>
-
-        <p className="mt-4 text-center text-sm text-zinc-600 dark:text-zinc-400">
-          {mode === "sign-in" ? "Need an account?" : "Already registered?"}{" "}
-          <button
-            type="button"
-            className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-            onClick={() => {
-              setMode(mode === "sign-in" ? "sign-up" : "sign-in");
-              setError(null);
-              setMessage(null);
-            }}
-          >
-            {mode === "sign-in" ? "Create one" : "Sign in"}
-          </button>
-        </p>
       </CardContent>
     </Card>
   );

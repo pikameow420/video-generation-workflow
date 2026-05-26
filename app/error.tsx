@@ -18,7 +18,7 @@ export default function Error({
       <div className="w-full max-w-xl rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
         <h2 className="text-lg font-semibold">Something went wrong</h2>
         <p className="mt-2 text-sm text-red-800/90 dark:text-red-200/90">
-          {error.message || "The page failed to render."}
+          {error.message || "This page could not load. Try again in a moment."}
         </p>
         <button
           type="button"

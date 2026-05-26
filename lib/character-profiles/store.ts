@@ -56,7 +56,6 @@ export class CharacterProfileNotFoundError extends Error {
   }
 }
 
-/** Stored row shape (local JSON index and the Supabase table both map to this). */
 type StoredCharacterProfile = {
   id: string;
   name: string;
@@ -129,9 +128,7 @@ async function applyVoiceSampleMutation(
     if (current.path && current.path !== newPath) {
       try {
         await adapter.removeVoiceAtPath(current.path);
-      } catch {
-        /* tolerate missing blob */
-      }
+      } catch {}
     }
     return {
       path: newPath,
@@ -144,9 +141,7 @@ async function applyVoiceSampleMutation(
     if (current.path) {
       try {
         await adapter.removeVoiceAtPath(current.path);
-      } catch {
-        /* tolerate missing blob */
-      }
+      } catch {}
     }
     return { path: null, mime: null, name: null };
   }
@@ -165,7 +160,6 @@ function normalizeIds(raw: unknown): string[] {
   return raw.filter((item): item is string => typeof item === "string" && item.length > 0);
 }
 
-/** Anchor refs are stored by id; URLs are re-resolved at read time because signed URLs expire. */
 async function resolveReferenceImages(
   ids: string[],
   userId?: string,

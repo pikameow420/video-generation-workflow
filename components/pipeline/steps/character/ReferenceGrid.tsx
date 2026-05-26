@@ -4,7 +4,6 @@ import type { ReferenceImage } from "@/components/pipeline/types";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 
-/** Reference thumbnail grid used by profile form (by id) and run picker (by url). */
 export function ReferenceGrid({
   busy,
   referenceImages,
@@ -21,7 +20,7 @@ export function ReferenceGrid({
   if (!referenceImages.length) {
     return (
       <p className="text-xs text-zinc-500">
-        No saved references yet. Upload one to use it here.
+        No reference images yet—upload one to get started.
       </p>
     );
   }

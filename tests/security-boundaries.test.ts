@@ -19,10 +19,16 @@ vi.mock("@/lib/muapi/client", () => ({
   startMuapiVideoJob: vi.fn(),
 }));
 
+vi.mock("@/lib/persistence/backend", () => ({
+  isSupabasePersistenceEnabled: vi.fn(() => true),
+}));
+
 import { POST as scriptsPost } from "@/app/api/scripts/route";
 import { GET as scriptsLibraryGet, POST as scriptsLibraryPost } from "@/app/api/scripts/library/route";
 import { POST as videoPost } from "@/app/api/video/route";
+import { GET as videoQuotaGet } from "@/app/api/video/quota/route";
 import { GET as videoStatusGet } from "@/app/api/video/status/route";
+import { FREE_VIDEO_LIMIT_REACHED } from "@/lib/auth/video-quota-policy";
 import { GET as pipelineVideosGet } from "@/app/api/pipeline-videos/route";
 import {
   GET as characterProfilesGet,
@@ -39,6 +45,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const mockUserA = { id: "user-a-uuid", email: "usera@test.com" };
 const mockUserB = { id: "user-b-uuid", email: "userb@test.com" };
+const mockUserAdvit = { id: "user-advit-uuid", email: "advit@example.com" };
+
+function mockPredictionOwnershipCount(count: number) {
+  mockAdminClient(
+    vi.fn((table: string) => {
+      if (table === "prediction_ownership") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ count, error: null }),
+          }),
+        };
+      }
+      return { select: vi.fn() };
+    }),
+  );
+}
 
 function createMockRequest(
   url: string,
@@ -408,6 +430,66 @@ describe("Security Boundaries", () => {
 
       expect(res.status).toBe(401);
       expect(json.error).toBe("Unauthorized");
+    });
+  });
+
+  describe("10. Video generation quota", () => {
+    it("POST /api/video returns 403 when non-exempt user already used free generation", async () => {
+      mockAuthForUser(mockUserB);
+      mockPredictionOwnershipCount(1);
+
+      const req = createMockRequest("/api/video", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const res = await videoPost(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(403);
+      expect(json.code).toBe(FREE_VIDEO_LIMIT_REACHED);
+    });
+
+    it("POST /api/video is not blocked for advit-prefixed email when count is 1", async () => {
+      mockAuthForUser(mockUserAdvit);
+      mockPredictionOwnershipCount(1);
+
+      const req = createMockRequest("/api/video", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const res = await videoPost(req);
+
+      expect(res.status).not.toBe(403);
+    });
+
+    it("GET /api/video/quota returns expected shape for limited user", async () => {
+      mockAuthForUser(mockUserB);
+      mockPredictionOwnershipCount(1);
+
+      const res = await videoQuotaGet();
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json).toEqual({
+        exempt: false,
+        used: 1,
+        limit: 1,
+        canStart: false,
+      });
+    });
+
+    it("GET /api/video/quota marks advit email as exempt", async () => {
+      mockAuthForUser(mockUserAdvit);
+      mockPredictionOwnershipCount(3);
+
+      const res = await videoQuotaGet();
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.exempt).toBe(true);
+      expect(json.limit).toBeNull();
+      expect(json.canStart).toBe(true);
+      expect(json.used).toBe(3);
     });
   });
 

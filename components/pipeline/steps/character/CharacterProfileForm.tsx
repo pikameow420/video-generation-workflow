@@ -137,8 +137,8 @@ export function CharacterProfileForm({
     <div className="space-y-4 rounded-xl border border-zinc-300 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/60">
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
         {editingProfile
-          ? `Edit Character Profile — ${editingProfile.name}`
-          : "New Character Profile"}
+          ? `Edit character — ${editingProfile.name}`
+          : "New character"}
       </p>
       <div className="space-y-1.5">
         <Label htmlFor="profile-form-name">Name</Label>
@@ -154,7 +154,7 @@ export function CharacterProfileForm({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="profile-form-art-direction">
-          Art Direction (Optional)
+          Default visual style (optional)
         </Label>
         <Input
           id="profile-form-art-direction"
@@ -170,7 +170,7 @@ export function CharacterProfileForm({
         />
       </div>
       <div className="space-y-2">
-        <Label>Anchor Reference Photos (pick at least 1)</Label>
+        <Label>Reference images (pick at least one)</Label>
         <ReferenceLibraryPicker
           busy={busy}
           disabled={savingProfile}
@@ -184,12 +184,12 @@ export function CharacterProfileForm({
         />
         {!formReferenceIds.length ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            Select at least one reference image to anchor this character.
+            Pick at least one image so we know who this character is.
           </p>
         ) : null}
       </div>
       <div className="space-y-2">
-        <Label>Voice Sample (Optional, MP3/WAV)</Label>
+        <Label>Voice sample (optional, MP3 or WAV)</Label>
         <div className="flex flex-wrap items-center gap-2">
           <label className="cursor-pointer rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900">
             <input

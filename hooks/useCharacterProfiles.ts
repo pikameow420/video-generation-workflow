@@ -27,7 +27,6 @@ type ProfileSubmitOptions = {
   onSuccess?: (profile: CharacterProfile) => void;
 };
 
-/** Character profile list/create/delete API calls for the Character step. */
 export function useCharacterProfiles(options: {
   setCharacterProfiles: Dispatch<SetStateAction<CharacterProfile[]>>;
   setLoadingCharacterProfiles: Dispatch<SetStateAction<boolean>>;
@@ -148,11 +147,11 @@ export function useCharacterProfiles(options: {
     ): Promise<boolean> => {
       const name = input.name.trim();
       if (!name) {
-        toast.error("Profile name is required.");
+        toast.error("Give this character a name.");
         return false;
       }
       if (!input.referenceImageIds.length) {
-        toast.error("Select at least one anchor reference image for the profile.");
+        toast.error("Pick at least one reference image.");
         return false;
       }
       try {
@@ -163,7 +162,7 @@ export function useCharacterProfiles(options: {
           referenceImageIds: input.referenceImageIds,
           voiceFile: input.voiceFile,
         });
-        toast.success(`Character profile "${created.name}" saved.`);
+        toast.success(`Character "${created.name}" saved.`);
         submitOptions?.onSuccess?.(created);
         return true;
       } catch (err) {
@@ -187,11 +186,11 @@ export function useCharacterProfiles(options: {
     ): Promise<boolean> => {
       const name = input.name.trim();
       if (!name) {
-        toast.error("Profile name is required.");
+        toast.error("Give this character a name.");
         return false;
       }
       if (!input.referenceImageIds.length) {
-        toast.error("Select at least one anchor reference image for the profile.");
+        toast.error("Pick at least one reference image.");
         return false;
       }
       try {
@@ -203,7 +202,7 @@ export function useCharacterProfiles(options: {
           voiceFile: input.voiceFile,
           removeVoiceSample: input.removeVoiceSample,
         });
-        toast.success(`Character profile "${updated.name}" updated.`);
+        toast.success(`Character "${updated.name}" updated.`);
         submitOptions?.onSuccess?.(updated);
         return true;
       } catch (err) {

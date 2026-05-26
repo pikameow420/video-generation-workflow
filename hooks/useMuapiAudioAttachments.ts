@@ -10,7 +10,6 @@ import {
 } from "@/lib/schemas";
 import { toast } from "sonner";
 
-/** MuAPI-only: optional @audio1 reference files (not persisted in localStorage). */
 export function useMuapiAudioAttachments() {
   const [muapiAudioDataUrls, setMuapiAudioDataUrls] = useState<string[]>([]);
   const [muapiAudioFileNames, setMuapiAudioFileNames] = useState<string[]>([]);
@@ -28,14 +27,14 @@ export function useMuapiAudioAttachments() {
 
       const take = files.slice(0, maxMuapiAudioFiles);
       if (files.length > maxMuapiAudioFiles) {
-        toast.info(`Using the first ${maxMuapiAudioFiles} audio files.`);
+        toast.info(`Only the first ${maxMuapiAudioFiles} clips are used.`);
       }
 
       void (async () => {
         for (const f of take) {
           const lower = f.name.toLowerCase();
           if (!lower.endsWith(".mp3") && !lower.endsWith(".wav")) {
-            toast.error("Voice reference must be MP3 or WAV.");
+            toast.error("Voice clips must be MP3 or WAV.");
             return;
           }
           if (f.size > maxMuapiAudioBytesPerFile) {
@@ -58,11 +57,11 @@ export function useMuapiAudioAttachments() {
           setMuapiAudioFileNames(names);
           toast.success(
             urls.length === 1
-              ? "Voice reference attached for @audio1."
-              : `${urls.length} audio samples attached (@audio1…@audio${urls.length}).`,
+              ? "Voice clip attached."
+              : `${urls.length} voice clips attached.`,
           );
         } catch {
-          toast.error("Could not read audio files.");
+          toast.error("Could not read those audio files.");
         }
       })();
     },

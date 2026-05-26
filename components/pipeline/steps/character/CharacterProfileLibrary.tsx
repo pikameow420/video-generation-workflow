@@ -59,7 +59,7 @@ export function CharacterProfileLibrary({
       <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Your Character Profiles
+            Saved characters
           </p>
           <Button
             type="button"
@@ -91,7 +91,7 @@ export function CharacterProfileLibrary({
                   className="block w-full text-left"
                 >
                   <span className="block truncate pr-8 font-semibold text-zinc-900 dark:text-zinc-100">
-                    {isSelected ? "Selected - " : ""}
+                    {isSelected ? "Active · " : ""}
                     {profile.name}
                   </span>
                   <span className="mt-1 flex flex-wrap gap-2 text-xs text-zinc-500">
@@ -104,7 +104,7 @@ export function CharacterProfileLibrary({
                         <Mic className="h-3 w-3" aria-hidden /> voice
                       </span>
                     ) : null}
-                    {profile.sheetUrl ? <span>saved sheet</span> : null}
+                    {profile.sheetUrl ? <span>has sheet</span> : null}
                   </span>
                   {profile.referenceImages.length ? (
                     <span className="mt-2 flex gap-1.5">
@@ -177,19 +177,19 @@ export function CharacterProfileLibrary({
         </div>
         {!profiles.length && !loadingProfiles ? (
           <p className="text-xs text-zinc-500">
-            No character profiles yet. Create one to reuse references, art
-            direction, and voice in one click next run.
+            Save a character once to reuse their look, references, and voice on
+            every run.
           </p>
         ) : null}
         {selectedProfile ? (
           <p className="text-xs text-zinc-500">
-            Using <span className="font-medium">{selectedProfile.name}</span> —
-            its references, art direction, and voice are pre-filled in the run
-            section below. You can still tweak them for this run.
+            <span className="font-medium">{selectedProfile.name}</span> is active—
+            references, style, and voice are filled in below. Adjust anything for
+            this run only.
           </p>
         ) : (
           <p className="text-xs text-zinc-500">
-            No profile selected — this will be a one-off run.
+            No character selected—you can still run once without saving a profile.
           </p>
         )}
       </div>

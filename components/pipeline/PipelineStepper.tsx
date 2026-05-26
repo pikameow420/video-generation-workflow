@@ -39,7 +39,7 @@ function stepTooltipReason(
 ): string | undefined {
   if (!state.accessible && state.disabledReason) return state.disabledReason;
   if (busy && state.accessible)
-    return "Wait for the current request before changing steps.";
+    return "Wait for the current step to finish before jumping ahead.";
   return undefined;
 }
 

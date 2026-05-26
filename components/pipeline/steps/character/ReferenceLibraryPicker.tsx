@@ -37,7 +37,7 @@ export function ReferenceLibraryPicker({
     <>
       <div className="flex flex-wrap items-center gap-2">
         <label className="inline-flex cursor-pointer items-center rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted">
-          Upload Reference
+          Upload image
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -53,7 +53,7 @@ export function ReferenceLibraryPicker({
           disabled={pickerBusy || loadingReferenceImages}
           className="rounded-full"
         >
-          {loadingReferenceImages ? "Refreshing..." : "Refresh Library"}
+          {loadingReferenceImages ? "Refreshing…" : "Refresh images"}
         </Button>
         {selectedCount !== undefined ? (
           <span className="text-xs text-zinc-500">{selectedCount} selected</span>
