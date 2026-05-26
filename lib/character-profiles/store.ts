@@ -10,24 +10,11 @@ import {
   uploadStorageObject,
 } from "@/lib/supabase/storage";
 import { listReferenceImages } from "@/lib/uploads/store";
-import { characterProfileSchema } from "@/lib/schemas";
-
-export type CharacterProfileReference = {
-  id: string;
-  url: string;
-  originalName: string;
-};
-
-export type CharacterProfileRecord = {
-  id: string;
-  name: string;
-  artDirection: string;
-  referenceImages: CharacterProfileReference[];
-  voiceSample: { url: string; mimeType: string; originalName: string } | null;
-  sheetUrl: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+import {
+  characterProfileSchema,
+  type CharacterProfile,
+  type CharacterProfileReference,
+} from "@/lib/schemas";
 
 export type CreateCharacterProfileInput = {
   name: string;
@@ -109,6 +96,62 @@ function sanitizeFileBase(input: string): string {
   const base = path.basename(input, path.extname(input));
   const clean = base.replace(/[^a-zA-Z0-9-_]+/g, "-").replace(/^-+|-+$/g, "");
   return clean || "voice";
+}
+
+type VoiceStoredFields = {
+  path: string | null;
+  mime: string | null;
+  name: string | null;
+};
+
+type VoiceUploadAdapter = {
+  uploadReplacement: (args: {
+    id: string;
+    voice: NonNullable<UpdateCharacterProfileInput["voiceSample"]>;
+  }) => Promise<string>;
+  removeVoiceAtPath: (objectPath: string) => Promise<void>;
+};
+
+async function applyVoiceSampleMutation(
+  profileId: string,
+  current: VoiceStoredFields,
+  input: UpdateCharacterProfileInput,
+  adapter: VoiceUploadAdapter,
+): Promise<VoiceStoredFields> {
+  const replacingVoice = Boolean(input.voiceSample);
+  const clearingVoice = !replacingVoice && Boolean(input.removeVoiceSample);
+
+  if (replacingVoice && input.voiceSample) {
+    const newPath = await adapter.uploadReplacement({
+      id: profileId,
+      voice: input.voiceSample,
+    });
+    if (current.path && current.path !== newPath) {
+      try {
+        await adapter.removeVoiceAtPath(current.path);
+      } catch {
+        /* tolerate missing blob */
+      }
+    }
+    return {
+      path: newPath,
+      mime: input.voiceSample.mimeType,
+      name: input.voiceSample.originalName,
+    };
+  }
+
+  if (clearingVoice) {
+    if (current.path) {
+      try {
+        await adapter.removeVoiceAtPath(current.path);
+      } catch {
+        /* tolerate missing blob */
+      }
+    }
+    return { path: null, mime: null, name: null };
+  }
+
+  return current;
 }
 
 function asIso(ts: unknown): string {
@@ -199,7 +242,7 @@ function localAssetUrl(fileName: string): string {
 async function toRecordLocal(
   stored: StoredCharacterProfile,
   userId?: string,
-): Promise<CharacterProfileRecord> {
+): Promise<CharacterProfile> {
   const referenceImages = await resolveReferenceImages(stored.referenceImageIds, userId);
   return characterProfileSchema.parse({
     id: stored.id,
@@ -217,7 +260,7 @@ async function toRecordLocal(
     sheetUrl: stored.sheetStoragePath ? localAssetUrl(stored.sheetStoragePath) : null,
     createdAt: stored.createdAt,
     updatedAt: stored.updatedAt,
-  }) as CharacterProfileRecord;
+  });
 }
 
 // --- Supabase backend ----------------------------------------------------------
@@ -239,7 +282,7 @@ type CharacterProfileRow = {
 async function toRecordSupabase(
   row: CharacterProfileRow,
   userId: string,
-): Promise<CharacterProfileRecord> {
+): Promise<CharacterProfile> {
   const env = getEnv();
   const admin = createAdminClient();
   const bucket = env.SUPABASE_CHARACTER_ASSETS_BUCKET;
@@ -250,7 +293,7 @@ async function toRecordSupabase(
     userId,
   );
 
-  let voiceSample: CharacterProfileRecord["voiceSample"] = null;
+  let voiceSample: CharacterProfile["voiceSample"] = null;
   if (row.voice_sample_path && row.voice_sample_mime) {
     const url = await createStorageSignedUrl(admin, bucket, row.voice_sample_path, expires);
     voiceSample = {
@@ -274,13 +317,13 @@ async function toRecordSupabase(
     sheetUrl,
     createdAt: asIso(row.created_at),
     updatedAt: asIso(row.updated_at),
-  }) as CharacterProfileRecord;
+  });
 }
 
 async function createCharacterProfileSupabase(
   input: CreateCharacterProfileInput,
   userId: string,
-): Promise<CharacterProfileRecord> {
+): Promise<CharacterProfile> {
   const env = getEnv();
   const admin = createAdminClient();
   const bucket = env.SUPABASE_CHARACTER_ASSETS_BUCKET;
@@ -339,7 +382,7 @@ async function createCharacterProfileSupabase(
 
 async function listCharacterProfilesSupabase(
   userId: string,
-): Promise<CharacterProfileRecord[]> {
+): Promise<CharacterProfile[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("character_profiles")
@@ -351,11 +394,9 @@ async function listCharacterProfilesSupabase(
   }
   if (!data?.length) return [];
 
-  const out: CharacterProfileRecord[] = [];
-  for (const row of data) {
-    out.push(await toRecordSupabase(row as CharacterProfileRow, userId));
-  }
-  return out;
+  return Promise.all(
+    data.map((row) => toRecordSupabase(row as CharacterProfileRow, userId)),
+  );
 }
 
 async function getCharacterProfileRowSupabase(
@@ -407,52 +448,37 @@ async function updateCharacterProfileSupabase(
   id: string,
   input: UpdateCharacterProfileInput,
   userId: string,
-): Promise<CharacterProfileRecord> {
+): Promise<CharacterProfile> {
   const env = getEnv();
   const admin = createAdminClient();
   const bucket = env.SUPABASE_CHARACTER_ASSETS_BUCKET;
   const row = await getCharacterProfileRowSupabase(id, userId);
 
-  let voiceSamplePath = row.voice_sample_path;
-  let voiceSampleMime = row.voice_sample_mime;
-  let voiceSampleName = row.voice_sample_name;
+  const voiceAfter = await applyVoiceSampleMutation(
+    id,
+    {
+      path: row.voice_sample_path,
+      mime: row.voice_sample_mime,
+      name: row.voice_sample_name,
+    },
+    input,
+    {
+      uploadReplacement: async ({ id: pid, voice }) => {
+        const ext = audioExtFromMime(voice.mimeType);
+        const safeBase = sanitizeFileBase(voice.originalName);
+        const objectPath = `${pid}/voice-${safeBase}.${ext}`;
+        await uploadStorageObject(admin, bucket, objectPath, voice.bytes, voice.mimeType);
+        return objectPath;
+      },
+      removeVoiceAtPath: async (objectPath) => {
+        await removeStorageObject(admin, bucket, objectPath);
+      },
+    },
+  );
 
-  const replacingVoice = Boolean(input.voiceSample);
-  const clearingVoice = !replacingVoice && Boolean(input.removeVoiceSample);
-
-  if (replacingVoice && input.voiceSample) {
-    const ext = audioExtFromMime(input.voiceSample.mimeType);
-    const safeBase = sanitizeFileBase(input.voiceSample.originalName);
-    const newPath = `${id}/voice-${safeBase}.${ext}`;
-    await uploadStorageObject(
-      admin,
-      bucket,
-      newPath,
-      input.voiceSample.bytes,
-      input.voiceSample.mimeType,
-    );
-    if (row.voice_sample_path && row.voice_sample_path !== newPath) {
-      try {
-        await removeStorageObject(admin, bucket, row.voice_sample_path);
-      } catch {
-        /* tolerate missing blob */
-      }
-    }
-    voiceSamplePath = newPath;
-    voiceSampleMime = input.voiceSample.mimeType;
-    voiceSampleName = input.voiceSample.originalName;
-  } else if (clearingVoice) {
-    if (row.voice_sample_path) {
-      try {
-        await removeStorageObject(admin, bucket, row.voice_sample_path);
-      } catch {
-        /* tolerate missing blob */
-      }
-    }
-    voiceSamplePath = null;
-    voiceSampleMime = null;
-    voiceSampleName = null;
-  }
+  const voiceSamplePath = voiceAfter.path;
+  const voiceSampleMime = voiceAfter.mime;
+  const voiceSampleName = voiceAfter.name;
 
   const updatedAt = new Date().toISOString();
   const { error } = await admin
@@ -491,7 +517,7 @@ async function saveCharacterProfileSheetSupabase(
   id: string,
   input: SaveCharacterProfileSheetInput,
   userId: string,
-): Promise<CharacterProfileRecord> {
+): Promise<CharacterProfile> {
   const env = getEnv();
   const admin = createAdminClient();
   const bucket = env.SUPABASE_CHARACTER_ASSETS_BUCKET;
@@ -539,7 +565,7 @@ async function saveCharacterProfileSheetSupabase(
 export async function createCharacterProfile(
   input: CreateCharacterProfileInput,
   userId?: string,
-): Promise<CharacterProfileRecord> {
+): Promise<CharacterProfile> {
   if (isSupabasePersistenceEnabled()) {
     if (!userId) {
       throw new Error("userId required when Supabase persistence is enabled");
@@ -581,7 +607,7 @@ export async function createCharacterProfile(
 
 export async function listCharacterProfiles(
   userId?: string,
-): Promise<CharacterProfileRecord[]> {
+): Promise<CharacterProfile[]> {
   if (isSupabasePersistenceEnabled()) {
     if (!userId) {
       throw new Error("userId required when Supabase persistence is enabled");
@@ -591,7 +617,7 @@ export async function listCharacterProfiles(
 
   const records = await readLocalIndex();
   records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const out: CharacterProfileRecord[] = [];
+  const out: CharacterProfile[] = [];
   for (const stored of records) {
     out.push(await toRecordLocal(stored, userId));
   }
@@ -601,7 +627,7 @@ export async function listCharacterProfiles(
 export async function getCharacterProfile(
   id: string,
   userId?: string,
-): Promise<CharacterProfileRecord> {
+): Promise<CharacterProfile> {
   if (isSupabasePersistenceEnabled()) {
     if (!userId) {
       throw new Error("userId required when Supabase persistence is enabled");
@@ -622,7 +648,7 @@ export async function updateCharacterProfile(
   id: string,
   input: UpdateCharacterProfileInput,
   userId?: string,
-): Promise<CharacterProfileRecord> {
+): Promise<CharacterProfile> {
   if (isSupabasePersistenceEnabled()) {
     if (!userId) {
       throw new Error("userId required when Supabase persistence is enabled");
@@ -636,30 +662,30 @@ export async function updateCharacterProfile(
     throw new CharacterProfileNotFoundError(id);
   }
 
-  const replacingVoice = Boolean(input.voiceSample);
-  const clearingVoice = !replacingVoice && Boolean(input.removeVoiceSample);
+  const voiceAfter = await applyVoiceSampleMutation(
+    id,
+    {
+      path: stored.voiceSamplePath,
+      mime: stored.voiceSampleMime,
+      name: stored.voiceSampleName,
+    },
+    input,
+    {
+      uploadReplacement: async ({ id: pid, voice }) => {
+        const ext = audioExtFromMime(voice.mimeType);
+        const safeBase = sanitizeFileBase(voice.originalName);
+        return writeLocalAsset(
+          `voice-${safeBase}-${pid}.${ext}`,
+          voice.bytes,
+        );
+      },
+      removeVoiceAtPath: removeLocalAsset,
+    },
+  );
 
-  if (replacingVoice && input.voiceSample) {
-    const ext = audioExtFromMime(input.voiceSample.mimeType);
-    const safeBase = sanitizeFileBase(input.voiceSample.originalName);
-    const newPath = await writeLocalAsset(
-      `voice-${safeBase}-${id}.${ext}`,
-      input.voiceSample.bytes,
-    );
-    if (stored.voiceSamplePath && stored.voiceSamplePath !== newPath) {
-      await removeLocalAsset(stored.voiceSamplePath);
-    }
-    stored.voiceSamplePath = newPath;
-    stored.voiceSampleMime = input.voiceSample.mimeType;
-    stored.voiceSampleName = input.voiceSample.originalName;
-  } else if (clearingVoice) {
-    if (stored.voiceSamplePath) {
-      await removeLocalAsset(stored.voiceSamplePath);
-    }
-    stored.voiceSamplePath = null;
-    stored.voiceSampleMime = null;
-    stored.voiceSampleName = null;
-  }
+  stored.voiceSamplePath = voiceAfter.path;
+  stored.voiceSampleMime = voiceAfter.mime;
+  stored.voiceSampleName = voiceAfter.name;
 
   stored.name = input.name;
   stored.artDirection = input.artDirection;
@@ -692,7 +718,7 @@ export async function saveCharacterProfileSheet(
   id: string,
   input: SaveCharacterProfileSheetInput,
   userId?: string,
-): Promise<CharacterProfileRecord> {
+): Promise<CharacterProfile> {
   if (isSupabasePersistenceEnabled()) {
     if (!userId) {
       throw new Error("userId required when Supabase persistence is enabled");

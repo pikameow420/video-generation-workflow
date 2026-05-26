@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { z, ZodError } from "zod";
+import { parseErrorMessage } from "@/lib/api/errors";
 import {
   characterProfileSchema,
   updateCharacterProfileFieldsSchema,
 } from "@/lib/schemas";
 import {
   CharacterProfileNotFoundError,
+  deleteCharacterProfile,
   updateCharacterProfile,
 } from "@/lib/character-profiles/store";
 import { readVoiceSampleFromForm } from "@/lib/character-profiles/voice-form";
@@ -75,12 +77,53 @@ export async function PUT(
     }
     if (err instanceof ZodError) {
       return NextResponse.json(
-        { error: err.issues.map((i) => i.message).join("; ") },
+        { error: parseErrorMessage(err, "Validation failed") },
         { status: 400 },
       );
     }
-    const message =
-      err instanceof Error ? err.message : "Failed to update character profile";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: parseErrorMessage(
+          err,
+          "Failed to update character profile",
+        ),
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(
+  _req: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  try {
+    const auth = await requireUser();
+    if (auth.error) return auth.error;
+
+    const { id } = await context.params;
+    const parsedId = idSchema.safeParse(id);
+    if (!parsedId.success) {
+      return NextResponse.json(
+        { error: "Invalid character profile id" },
+        { status: 400 },
+      );
+    }
+
+    await deleteCharacterProfile(parsedId.data, auth.user.id);
+    return new NextResponse(null, { status: 204 });
+  } catch (err) {
+    if (err instanceof CharacterProfileNotFoundError) {
+      return NextResponse.json({ error: err.message }, { status: 404 });
+    }
+    return NextResponse.json(
+      {
+        error: parseErrorMessage(
+          err,
+          "Failed to delete character profile",
+        ),
+      },
+      { status: 500 },
+    );
   }
 }
