@@ -6,7 +6,7 @@ import type {
   Step,
   WizardSnapshot,
 } from "@/components/pipeline/types";
-import type { VideoProvider } from "@/lib/schemas";
+import type { CharacterProfile, VideoProvider } from "@/lib/schemas";
 
 export const WIZARD_STORAGE_KEY = "video-pipeline-wizard-state-v1";
 export const MAX_MANUAL_SCRIPT_FILE_BYTES = 256 * 1024;
@@ -214,4 +214,60 @@ export function dedupeReferenceUrls(urls: string[]): string[] {
     if (deduped.length >= MAX_REFERENCE_IMAGES) break;
   }
   return deduped;
+}
+
+export type CharacterRunOverrides = {
+  artDirection?: string;
+  referenceUrls?: string[];
+};
+
+/** Effective reference URLs for this run (overrides, else profile anchors). */
+export function resolveRunReferenceUrls(
+  overrides: CharacterRunOverrides | undefined,
+  profile: CharacterProfile | null,
+): string[] {
+  if (overrides?.referenceUrls) {
+    return dedupeReferenceUrls(overrides.referenceUrls);
+  }
+  return dedupeReferenceUrls(
+    profile?.referenceImages.map((item) => item.url) ?? [],
+  );
+}
+
+export function buildRunOverridesFromSnapshot(loaded: {
+  artDirection?: string;
+  selectedReferenceUrls?: string[];
+}): CharacterRunOverrides {
+  const overrides: CharacterRunOverrides = {};
+  if (loaded.artDirection !== undefined) {
+    overrides.artDirection = loaded.artDirection;
+  }
+  if (loaded.selectedReferenceUrls) {
+    overrides.referenceUrls = dedupeReferenceUrls(loaded.selectedReferenceUrls);
+  }
+  return overrides;
+}
+
+/** Download a profile voice sample URL and return a normalized data URL. */
+export async function fetchVoiceSampleDataUrl(voice: {
+  url: string;
+  mimeType: string;
+}): Promise<string> {
+  const res = await fetch(voice.url);
+  if (!res.ok) {
+    throw new Error("Could not download the profile's voice sample");
+  }
+  const blob = await res.blob();
+  const rawDataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Could not read the profile's voice sample"));
+    };
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Could not read the profile's voice sample"));
+    reader.readAsDataURL(blob);
+  });
+  const base64 = rawDataUrl.slice(rawDataUrl.indexOf(",") + 1);
+  return `data:${voice.mimeType};base64,${base64}`;
 }

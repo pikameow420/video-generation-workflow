@@ -7,10 +7,7 @@ import { toast } from "sonner";
 
 import { postJson } from "@/lib/api/client";
 import type { SubtitleLanguage } from "@/components/pipeline/types";
-type ApiActionRunner = (
-  action: () => Promise<void>,
-  fallbackError: string,
-) => Promise<void>;
+import type { RunApiAction } from "@/hooks/useApiAction";
 import {
   burnSubtitlesResponseSchema,
   transcribeSubtitlesResponseSchema,
@@ -18,7 +15,7 @@ import {
 
 /** Transcribe + burn subtitles (Video step actions). */
 export function useWizardSubtitleActions(options: {
-  runApiAction: ApiActionRunner;
+  runApiAction: RunApiAction;
   videoUrl: string | null;
   subtitleLanguage: SubtitleLanguage;
   scriptBody: string;
