@@ -34,6 +34,24 @@ export async function createStorageSignedUrl(
   return data.signedUrl;
 }
 
+export async function downloadStorageObject(
+  client: SupabaseClient,
+  bucket: string,
+  objectPath: string,
+): Promise<{ bytes: Uint8Array; mimeType: string }> {
+  const { data, error } = await client.storage.from(bucket).download(objectPath);
+  if (error || !data) {
+    throw new Error(
+      `Supabase Storage download failed: ${error?.message ?? "missing object"}`,
+    );
+  }
+  const buffer = await data.arrayBuffer();
+  return {
+    bytes: new Uint8Array(buffer),
+    mimeType: data.type || "application/octet-stream",
+  };
+}
+
 export async function removeStorageObject(
   client: SupabaseClient,
   bucket: string,

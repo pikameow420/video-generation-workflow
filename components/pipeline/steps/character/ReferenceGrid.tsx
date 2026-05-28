@@ -7,17 +7,22 @@ import { X } from "lucide-react";
 /** Reference thumbnail grid used by profile form (by id) and run picker (by url). */
 export function ReferenceGrid({
   busy,
+  loading = false,
   referenceImages,
   isSelected,
   onToggle,
   onDelete,
 }: {
   busy: boolean;
+  loading?: boolean;
   referenceImages: ReferenceImage[];
   isSelected: (item: ReferenceImage) => boolean;
   onToggle: (item: ReferenceImage) => void;
   onDelete?: (item: ReferenceImage) => void;
 }) {
+  if (loading && !referenceImages.length) {
+    return <p className="text-xs text-zinc-500">Loading reference library…</p>;
+  }
   if (!referenceImages.length) {
     return (
       <p className="text-xs text-zinc-500">
@@ -27,7 +32,7 @@ export function ReferenceGrid({
   }
   return (
     <div className="grid gap-2 sm:grid-cols-3">
-      {referenceImages.slice(0, 6).map((item) => (
+      {referenceImages.map((item) => (
         <div
           key={item.id}
           className={cn(
@@ -46,6 +51,8 @@ export function ReferenceGrid({
             <img
               src={item.url}
               alt={item.originalName}
+              loading="lazy"
+              decoding="async"
               className="h-24 w-full object-cover"
             />
             <span className="block truncate px-2 py-1 text-xs text-zinc-600 group-hover:text-zinc-900 dark:text-zinc-400 dark:group-hover:text-zinc-100">
@@ -60,10 +67,7 @@ export function ReferenceGrid({
               aria-label={`Delete ${item.originalName} from library`}
               className={cn(
                 "absolute right-1 top-1 z-10 flex h-7 w-7 items-center justify-center rounded-full",
-                "bg-black/60 text-white shadow-sm transition-opacity hover:bg-black/80",
-                "pointer-events-none opacity-0",
-                "focus-visible:pointer-events-auto focus-visible:opacity-100",
-                "group-hover:pointer-events-auto group-hover:opacity-100",
+                "bg-black/60 text-white shadow-sm hover:bg-black/80",
                 "disabled:pointer-events-none disabled:opacity-40",
               )}
               onClick={(e) => {

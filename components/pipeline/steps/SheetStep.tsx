@@ -19,7 +19,6 @@ type SheetStepProps = {
   canStartVideo: boolean;
   /** True while a video job is starting or polling. */
   videoGenerationBusy: boolean;
-  /** MuAPI Omni: optional voice reference audio (shown only for 720p). */
   muapiAudioFileNames: string[];
   /** Set when the selected Character Profile's voice sample will be auto-attached as @audio1. */
   profileVoiceName: string | null;
@@ -126,7 +125,7 @@ export function SheetStep({
 
         <p className="text-xs text-zinc-500">
           {videoProvider === "muapi"
-            ? "720p · Optional MP3/WAV voice reference (up to 3 files, ≤15s total per MuAPI)."
+            ? "720p · Optional MP3/WAV voice reference (up to 3 files, ≤15s total)."
             : "480p"}
         </p>
 

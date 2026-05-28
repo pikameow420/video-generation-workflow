@@ -8,45 +8,51 @@ import type {
   CreateCharacterProfilePayload,
   UpdateCharacterProfilePayload,
 } from "@/hooks/useCharacterProfiles";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Mic, Pencil, Plus, X } from "lucide-react";
 
 export type CharacterProfileLibraryProps = {
   busy: boolean;
+  referenceLibraryBusy?: boolean;
   profiles: CharacterProfile[];
   loadingProfiles: boolean;
-  selectedProfileId: string | null;
-  selectedProfile: CharacterProfile | null;
+  isProfileSelectedForRun: (profileId: string) => boolean;
+  runCharacterCount: number;
+  staleRunSelection?: boolean;
   referenceImages: ReferenceImage[];
   loadingReferenceImages: boolean;
-  onSelectProfile: (id: string | null) => void;
+  onToggleRunProfile: (profile: CharacterProfile) => void;
   onDeleteProfile: (profile: CharacterProfile) => void;
-  onRefreshProfiles: () => void;
   onCreateProfile: (input: CreateCharacterProfilePayload) => Promise<boolean>;
   onUpdateProfile: (
     id: string,
     input: UpdateCharacterProfilePayload,
   ) => Promise<boolean>;
-  onUploadReference: (e: ChangeEvent<HTMLInputElement>) => void;
-  onRefreshReferences: () => void;
+  onUploadReference: (e: ChangeEvent<HTMLInputElement>) => Promise<ReferenceImage | null>;
+  onDeleteReference: (item: ReferenceImage) => void;
+  onGenerateMuapiCharacterSheet: (
+    profileId: string,
+    options?: { referenceImageIds: string[] },
+  ) => Promise<unknown>;
 };
 
 export function CharacterProfileLibrary({
   busy,
+  referenceLibraryBusy = false,
   profiles,
   loadingProfiles,
-  selectedProfileId,
-  selectedProfile,
+  isProfileSelectedForRun,
+  runCharacterCount,
+  staleRunSelection = false,
   referenceImages,
   loadingReferenceImages,
-  onSelectProfile,
+  onToggleRunProfile,
   onDeleteProfile,
-  onRefreshProfiles,
   onCreateProfile,
   onUpdateProfile,
   onUploadReference,
-  onRefreshReferences,
+  onDeleteReference,
+  onGenerateMuapiCharacterSheet,
 }: CharacterProfileLibraryProps) {
   const [formTarget, setFormTarget] = useState<"new" | string | null>(null);
 
@@ -57,24 +63,12 @@ export function CharacterProfileLibrary({
   return (
     <>
       <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Your Character Profiles
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onRefreshProfiles}
-            disabled={busy || loadingProfiles}
-            className="rounded-full"
-          >
-            {loadingProfiles ? "Refreshing..." : "Refresh"}
-          </Button>
-        </div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          Your Character Profiles
+        </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {profiles.map((profile) => {
-            const isSelected = selectedProfileId === profile.id;
+            const isSelected = isProfileSelectedForRun(profile.id);
             return (
               <div
                 key={profile.id}
@@ -87,11 +81,11 @@ export function CharacterProfileLibrary({
               >
                 <button
                   type="button"
-                  onClick={() => onSelectProfile(isSelected ? null : profile.id)}
+                  onClick={() => onToggleRunProfile(profile)}
                   className="block w-full text-left"
                 >
                   <span className="block truncate pr-8 font-semibold text-zinc-900 dark:text-zinc-100">
-                    {isSelected ? "Selected - " : ""}
+                    {isSelected ? "In run — " : ""}
                     {profile.name}
                   </span>
                   <span className="mt-1 flex flex-wrap gap-2 text-xs text-zinc-500">
@@ -99,12 +93,19 @@ export function CharacterProfileLibrary({
                       {profile.referenceImages.length} reference
                       {profile.referenceImages.length === 1 ? "" : "s"}
                     </span>
+                    {profile.muapiCharacterSheetUrl ? (
+                      <span>character sheet</span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-400">
+                        no character sheet
+                      </span>
+                    )}
                     {profile.voiceSample ? (
                       <span className="inline-flex items-center gap-1">
                         <Mic className="h-3 w-3" aria-hidden /> voice
                       </span>
                     ) : null}
-                    {profile.sheetUrl ? <span>saved sheet</span> : null}
+                    {profile.sheetUrl ? <span>saved frame sheet</span> : null}
                   </span>
                   {profile.referenceImages.length ? (
                     <span className="mt-2 flex gap-1.5">
@@ -175,37 +176,44 @@ export function CharacterProfileLibrary({
             {formTarget === "new" ? "Close" : "New Profile"}
           </button>
         </div>
-        {!profiles.length && !loadingProfiles ? (
+        {staleRunSelection ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            This run references a profile that could not be found. It may have
+            been deleted—deselect it or create a new profile below.
+          </p>
+        ) : loadingProfiles && !profiles.length ? (
+          <p className="text-xs text-zinc-500">Loading character profiles…</p>
+        ) : !profiles.length && !loadingProfiles ? (
           <p className="text-xs text-zinc-500">
             No character profiles yet. Create one to reuse references, art
             direction, and voice in one click next run.
           </p>
         ) : null}
-        {selectedProfile ? (
+        {runCharacterCount > 0 && !staleRunSelection ? (
           <p className="text-xs text-zinc-500">
-            Using <span className="font-medium">{selectedProfile.name}</span> —
-            its references, art direction, and voice are pre-filled in the run
-            section below. You can still tweak them for this run.
+            {runCharacterCount} profile{runCharacterCount === 1 ? "" : "s"} selected
+            for this run (max 3).
           </p>
-        ) : (
+        ) : runCharacterCount === 0 ? (
           <p className="text-xs text-zinc-500">
-            No profile selected — this will be a one-off run.
+            Select profiles to include in this run.
           </p>
-        )}
+        ) : null}
       </div>
 
       {formTarget !== null ? (
         <CharacterProfileForm
           key={formTarget}
-          busy={busy}
+          busy={busy || referenceLibraryBusy}
           formTarget={formTarget}
           profiles={profiles}
           referenceImages={referenceImages}
           loadingReferenceImages={loadingReferenceImages}
           onUploadReference={onUploadReference}
-          onRefreshReferences={onRefreshReferences}
+          onDeleteReference={onDeleteReference}
           onCreateProfile={onCreateProfile}
           onUpdateProfile={onUpdateProfile}
+          onGenerateMuapiCharacterSheet={onGenerateMuapiCharacterSheet}
           onClose={closeForm}
         />
       ) : null}

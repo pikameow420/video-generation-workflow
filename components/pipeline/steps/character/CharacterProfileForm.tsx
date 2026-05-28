@@ -8,6 +8,7 @@ import type {
   CreateCharacterProfilePayload,
   UpdateCharacterProfilePayload,
 } from "@/hooks/useCharacterProfiles";
+import { useProfileSheetGeneration } from "@/hooks/useProfileSheetGeneration";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,13 +55,17 @@ export type CharacterProfileFormProps = {
   profiles: CharacterProfile[];
   referenceImages: ReferenceImage[];
   loadingReferenceImages: boolean;
-  onUploadReference: (e: ChangeEvent<HTMLInputElement>) => void;
-  onRefreshReferences: () => void;
+  onUploadReference: (e: ChangeEvent<HTMLInputElement>) => Promise<ReferenceImage | null>;
+  onDeleteReference: (item: ReferenceImage) => void;
   onCreateProfile: (input: CreateCharacterProfilePayload) => Promise<boolean>;
   onUpdateProfile: (
     id: string,
     input: UpdateCharacterProfilePayload,
   ) => Promise<boolean>;
+  onGenerateMuapiCharacterSheet: (
+    profileId: string,
+    options?: { referenceImageIds: string[] },
+  ) => Promise<unknown>;
   onClose: () => void;
 };
 
@@ -71,9 +76,10 @@ export function CharacterProfileForm({
   referenceImages,
   loadingReferenceImages,
   onUploadReference,
-  onRefreshReferences,
+  onDeleteReference,
   onCreateProfile,
   onUpdateProfile,
+  onGenerateMuapiCharacterSheet,
   onClose,
 }: CharacterProfileFormProps) {
   const editingProfile =
@@ -87,6 +93,7 @@ export function CharacterProfileForm({
   const { formName, formArtDirection, formReferenceIds, formVoiceFile, formKeepExistingVoice } =
     fields;
   const [savingProfile, setSavingProfile] = useState(false);
+  const { generatingCharSheet, generateSheetFromForm } = useProfileSheetGeneration();
 
   const existingVoiceName =
     formKeepExistingVoice && !formVoiceFile
@@ -100,6 +107,26 @@ export function CharacterProfileForm({
         ? prev.formReferenceIds.filter((id) => id !== item.id)
         : [...prev.formReferenceIds, item.id].slice(0, 9),
     }));
+  };
+
+  const handleUploadReference = async (e: ChangeEvent<HTMLInputElement>) => {
+    const uploaded = await onUploadReference(e);
+    if (!uploaded) return;
+    setFields((prev) => {
+      if (prev.formReferenceIds.includes(uploaded.id)) return prev;
+      return {
+        ...prev,
+        formReferenceIds: [...prev.formReferenceIds, uploaded.id].slice(0, 9),
+      };
+    });
+  };
+
+  const handleDeleteReference = (item: ReferenceImage) => {
+    setFields((prev) => ({
+      ...prev,
+      formReferenceIds: prev.formReferenceIds.filter((id) => id !== item.id),
+    }));
+    void onDeleteReference(item);
   };
 
   const onVoiceFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -176,10 +203,10 @@ export function CharacterProfileForm({
           disabled={savingProfile}
           referenceImages={referenceImages}
           loadingReferenceImages={loadingReferenceImages}
-          onUploadReference={onUploadReference}
-          onRefreshReferences={onRefreshReferences}
+          onUploadReference={handleUploadReference}
           isSelected={(item) => formReferenceIds.includes(item.id)}
           onToggle={toggleFormReference}
+          onDelete={handleDeleteReference}
           selectedCount={formReferenceIds.length}
         />
         {!formReferenceIds.length ? (
@@ -188,8 +215,75 @@ export function CharacterProfileForm({
           </p>
         ) : null}
       </div>
+      {editingProfile ? (
+        <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <Label>Character sheet</Label>
+          <p className="text-xs text-zinc-500">
+            Built from your anchor photos. Generate before using this profile in a
+            run.
+          </p>
+          {editingProfile.muapiCharacterSheetUrl ? (
+            <div className="flex flex-wrap items-start gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={editingProfile.muapiCharacterSheetUrl}
+                alt={`Character sheet for ${editingProfile.name}`}
+                className="max-h-24 rounded-md border object-contain dark:border-zinc-700"
+              />
+              {editingProfile.muapiCharacterSheetUpdatedAt ? (
+                <p className="text-xs text-zinc-500">
+                  Updated{" "}
+                  {new Date(
+                    editingProfile.muapiCharacterSheetUpdatedAt,
+                  ).toLocaleString()}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Not generated yet.
+            </p>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-full"
+            disabled={formBusy || generatingCharSheet || !formReferenceIds.length}
+            onClick={() => {
+              void generateSheetFromForm({
+                profileId: editingProfile.id,
+                formName,
+                formArtDirection,
+                formReferenceIds,
+                formVoiceFile,
+                formKeepExistingVoice,
+                editingProfile,
+                onUpdateProfile,
+                onGenerateMuapiCharacterSheet,
+              });
+            }}
+          >
+            {generatingCharSheet ? (
+              <>
+                <Spinner className="mr-2 h-3 w-3" />
+                Generating...
+              </>
+            ) : editingProfile.muapiCharacterSheetUrl ? (
+              "Regenerate Character Sheet"
+            ) : (
+              "Generate Character Sheet"
+            )}
+          </Button>
+        </div>
+      ) : (
+        <p className="text-xs text-zinc-500">
+          Save the profile first, then generate the character sheet here.
+        </p>
+      )}
+
       <div className="space-y-2">
-        <Label>Voice Sample (Optional, MP3/WAV)</Label>
+        <Label>Voice Sample</Label>
         <div className="flex flex-wrap items-center gap-2">
           <label className="cursor-pointer rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900">
             <input

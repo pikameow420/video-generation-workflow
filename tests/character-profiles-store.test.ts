@@ -34,6 +34,7 @@ import {
   getCharacterProfile,
   listCharacterProfiles,
   saveCharacterProfileSheet,
+  saveMuapiCharacterSheet,
   updateCharacterProfile,
 } from "@/lib/character-profiles/store";
 
@@ -69,6 +70,8 @@ describe("character profile store — local JSON fallback", () => {
     expect(created.voiceSample?.mimeType).toBe("audio/mpeg");
     expect(created.voiceSample?.url).toMatch(/^\/uploads\/character-assets\//);
     expect(created.sheetUrl).toBeNull();
+    expect(created.muapiCharacterSheetUrl).toBeNull();
+    expect(created.muapiCharacterRequestId).toBeNull();
 
     const listed = await listCharacterProfiles();
     expect(listed.map((item) => item.id)).toContain(created.id);
@@ -148,6 +151,33 @@ describe("character profile store — local JSON fallback", () => {
         referenceImageIds: [],
       }),
     ).rejects.toBeInstanceOf(CharacterProfileNotFoundError);
+  });
+
+  it("saves a MuAPI character sheet and clears it when reference ids change", async () => {
+    const created = await createCharacterProfile({
+      name: "MuAPI Char",
+      artDirection: "",
+      referenceImageIds: ["ref-a"],
+      voiceSample: null,
+    });
+
+    const withSheet = await saveMuapiCharacterSheet(created.id, {
+      requestId: "muapi-req-99",
+      bytes: new Uint8Array([4, 5, 6]),
+      mimeType: "image/png",
+    });
+    expect(withSheet.muapiCharacterRequestId).toBe("muapi-req-99");
+    expect(withSheet.muapiCharacterSheetUrl).toMatch(
+      /^\/uploads\/character-assets\/muapi-char-sheet-/,
+    );
+
+    const cleared = await updateCharacterProfile(created.id, {
+      name: "MuAPI Char",
+      artDirection: "",
+      referenceImageIds: ["ref-b"],
+    });
+    expect(cleared.muapiCharacterRequestId).toBeNull();
+    expect(cleared.muapiCharacterSheetUrl).toBeNull();
   });
 
   it("deletes a profile and then refuses to return it", async () => {

@@ -28,6 +28,12 @@ export const scriptsResponseSchema = z.object({
   scripts: z.array(scriptOptionSchema).length(4),
 });
 
+export const frameSequenceCharacterAnchorSchema = z.object({
+  name: z.string().min(1),
+  characterSheetUrl: z.string().min(1),
+  referenceImageUrls: z.array(z.string().min(1)).max(3).optional(),
+});
+
 export const frameSequenceSheetRequestSchema = z.object({
   scriptTitle: z.string().min(1),
   scriptBody: z.string().min(1),
@@ -35,6 +41,11 @@ export const frameSequenceSheetRequestSchema = z.object({
   artDirection: z.string().optional(),
   /** Optional uploaded reference image URLs to steer identity/style consistency. */
   referenceImageUrls: z.array(z.string().min(1)).max(9).optional(),
+  characterAnchors: z
+    .array(frameSequenceCharacterAnchorSchema)
+    .min(1)
+    .max(3)
+    .optional(),
 });
 export const frameSequenceSheetResponseSchema = z.object({
   mimeType: z.string().min(1),
@@ -47,14 +58,26 @@ export type VideoProvider = z.infer<typeof videoProviderSchema>;
 export const maxMuapiAudioFiles = 3;
 export const maxMuapiAudioBytesPerFile = 12 * 1024 * 1024;
 
+export const videoImageSlotSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("frameSheet") }),
+  z.object({
+    kind: z.literal("characterSheet"),
+    name: z.string().min(1),
+    profileId: z.string().min(1).optional(),
+  }),
+  z.object({ kind: z.literal("extra") }),
+]);
+
+export const videoAudioSlotSchema = z.object({
+  name: z.string().min(1),
+});
+
 export const videoRequestSchema = z.object({
   scriptTitle: z.string().min(1),
   scriptBody: z.string().min(1),
-  /** Character sheet image: data URL (data:image/...;base64,...) or HTTPS URL. */
   imageDataUrlOrUrl: z.string().min(1),
-  /** When set, overrides `VIDEO_PROVIDER` for this request. */
+  runProfileIds: z.array(z.string().min(1)).min(1).max(3),
   provider: videoProviderSchema.optional(),
-  /** MuAPI only: up to 3 audio data URLs (MP3/WAV) for Omni Reference `audio_files`; slots @audio1…@audio3. */
   audioDataUrls: z
     .array(z.string().min(1))
     .max(maxMuapiAudioFiles)
@@ -182,6 +205,9 @@ export const characterProfileSchema = z.object({
     .nullable(),
   /** Last saved frame-sequence-sheet for this profile, reusable across runs. */
   sheetUrl: z.string().min(1).nullable(),
+  muapiCharacterRequestId: z.string().min(1).nullable(),
+  muapiCharacterSheetUrl: z.string().min(1).nullable(),
+  muapiCharacterSheetUpdatedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -239,6 +265,14 @@ export const saveCharacterProfileSheetRequestSchema = z.object({
     .regex(/^data:image\/(png|jpeg|webp);base64,/, {
       message: "imageDataUrl must be a base64 image data URL",
     }),
+});
+
+export const muapiCharacterSheetRequestSchema = z.object({
+  referenceImageIds: z
+    .array(z.string().min(1))
+    .min(1, "At least one anchor reference image is required")
+    .max(9)
+    .optional(),
 });
 
 export const savedScriptSourceSchema = z.enum([

@@ -1,6 +1,7 @@
 /** Shared wizard constants and helpers. */
 
 import type {
+  RunCharacterSelection,
   ScriptMode,
   ScriptOption,
   Step,
@@ -31,11 +32,9 @@ export function createEmptyWizardSnapshot(): WizardSnapshot {
     selectedId: null,
     scriptEdit: { title: "", body: "" },
     artDirection: "",
-    selectedCharacterProfileId: null,
-    useProfileVoice: true,
+    runCharacters: [],
     sheetUrl: null,
     sheetSource: "generated",
-    selectedReferenceUrls: [],
     sheetScriptHistory: [],
     videoUrl: null,
     videoMeta: null,
@@ -216,36 +215,63 @@ export function dedupeReferenceUrls(urls: string[]): string[] {
   return deduped;
 }
 
-export type CharacterRunOverrides = {
-  artDirection?: string;
-  referenceUrls?: string[];
-};
-
-/** Effective reference URLs for this run (overrides, else profile anchors). */
-export function resolveRunReferenceUrls(
-  overrides: CharacterRunOverrides | undefined,
-  profile: CharacterProfile | null,
-): string[] {
-  if (overrides?.referenceUrls) {
-    return dedupeReferenceUrls(overrides.referenceUrls);
+export function migrateWizardSnapshot(
+  loaded: Partial<WizardSnapshot>,
+): Partial<WizardSnapshot> {
+  const next = { ...loaded };
+  if (!next.runCharacters?.length && next.selectedCharacterProfileId) {
+    next.runCharacters = [
+      {
+        profileId: next.selectedCharacterProfileId,
+        extraReferenceUrls: [],
+      },
+    ];
   }
-  return dedupeReferenceUrls(
-    profile?.referenceImages.map((item) => item.url) ?? [],
-  );
+  if (!next.runCharacters) {
+    next.runCharacters = [];
+  }
+  delete next.videoExtraReferenceUrls;
+  delete next.selectedCharacterProfileId;
+  delete next.selectedReferenceUrls;
+  delete next.useProfileVoice;
+  return next;
 }
 
-export function buildRunOverridesFromSnapshot(loaded: {
-  artDirection?: string;
-  selectedReferenceUrls?: string[];
-}): CharacterRunOverrides {
-  const overrides: CharacterRunOverrides = {};
-  if (loaded.artDirection !== undefined) {
-    overrides.artDirection = loaded.artDirection;
+export function toggleRunCharacter(
+  current: RunCharacterSelection[],
+  profileId: string,
+  _profile?: CharacterProfile,
+): RunCharacterSelection[] {
+  const exists = current.find((c) => c.profileId === profileId);
+  if (exists) {
+    return current.filter((c) => c.profileId !== profileId);
   }
-  if (loaded.selectedReferenceUrls) {
-    overrides.referenceUrls = dedupeReferenceUrls(loaded.selectedReferenceUrls);
-  }
-  return overrides;
+  return [
+    ...current,
+    {
+      profileId,
+      extraReferenceUrls: [],
+    },
+  ];
+}
+
+export function buildCharacterAnchorsForSheet(
+  runCharacters: RunCharacterSelection[],
+  profiles: CharacterProfile[],
+) {
+  return runCharacters
+    .map((run) => {
+      const profile = profiles.find((p) => p.id === run.profileId);
+      if (!profile?.muapiCharacterSheetUrl) return null;
+      return {
+        name: profile.name,
+        characterSheetUrl: profile.muapiCharacterSheetUrl,
+        referenceImageUrls: run.extraReferenceUrls.length
+          ? dedupeReferenceUrls(run.extraReferenceUrls)
+          : undefined,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 }
 
 /** Download a profile voice sample URL and return a normalized data URL. */

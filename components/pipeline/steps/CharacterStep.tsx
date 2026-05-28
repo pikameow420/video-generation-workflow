@@ -8,11 +8,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export type CharacterStepProps = {
   busy: boolean;
+  generatingFrameSheet: boolean;
   library: Omit<CharacterProfileLibraryProps, "busy">;
-  runSetup: Omit<CharacterRunSetupProps, "busy">;
+  runSetup: Omit<CharacterRunSetupProps, "busy" | "generatingFrameSheet">;
 };
 
-export function CharacterStep({ busy, library, runSetup }: CharacterStepProps) {
+export function CharacterStep({
+  busy,
+  generatingFrameSheet,
+  library,
+  runSetup,
+}: CharacterStepProps) {
   return (
     <Card className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl border-zinc-200 bg-white shadow-sm duration-300 dark:border-zinc-800 dark:bg-zinc-950/50">
       <CardHeader>
@@ -25,7 +31,11 @@ export function CharacterStep({ busy, library, runSetup }: CharacterStepProps) {
       </CardHeader>
       <CardContent className="space-y-5 pb-6">
         <CharacterProfileLibrary {...library} busy={busy} />
-        <CharacterRunSetup {...runSetup} busy={busy} />
+        <CharacterRunSetup
+          {...runSetup}
+          busy={busy}
+          generatingFrameSheet={generatingFrameSheet}
+        />
       </CardContent>
     </Card>
   );

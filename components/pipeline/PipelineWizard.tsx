@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ScriptHistorySidebar } from "@/components/pipeline/ScriptHistorySidebar";
 import type {
@@ -94,6 +94,7 @@ export function PipelineWizard() {
   /** True only during `/api/video` — SheetStep uses this instead of shared `busy` for the primary CTA label. */
   const [videoGenerationBusy, setVideoGenerationBusy] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [frameSheetGenerationBusy, setFrameSheetGenerationBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useAuthGuard(useCallback(() => {
@@ -128,7 +129,12 @@ export function PipelineWizard() {
     clearError: () => setError(null),
   });
 
-  const { loadReferenceImages, loadSavedScripts } = usePipelineLibraryApi({
+  const {
+    loadReferenceImages,
+    loadSavedScripts,
+    upsertReferenceImage,
+    removeReferenceImage,
+  } = usePipelineLibraryApi({
     setReferenceImages,
     setLoadingReferenceImages,
     setSavedScripts,
@@ -171,8 +177,10 @@ export function PipelineWizard() {
   );
 
   const selectedScript = scripts?.find((script) => script.id === selectedId) ?? null;
-  const currentBatchPrimaryScript = scripts?.[0] ?? null;
-  const currentBatchRemainingScripts = scripts?.slice(1) ?? [];
+  const currentBatchPrimaryScript = selectedScript ?? scripts?.[0] ?? null;
+  const currentBatchRemainingScripts =
+    scripts?.filter((script) => script.id !== currentBatchPrimaryScript?.id) ??
+    [];
   const isScriptsDone =
     step === "character" || step === "sheet" || step === "video";
   const isCharacterDone = step === "sheet" || step === "video";
@@ -269,8 +277,8 @@ export function PipelineWizard() {
   const character = useWizardCharacterStep({
     invalidateGeneratedOutputs,
     setError,
-    runApiAction,
-    loadReferenceImages,
+    upsertReferenceImage,
+    removeReferenceImage,
     sheetUrl,
     advanceToSheet,
   });
@@ -278,27 +286,37 @@ export function PipelineWizard() {
   const {
     characterProfiles,
     loadingCharacterProfiles,
-    selectedCharacterProfileId,
-    selectedCharacterProfile,
-    useProfileVoice,
-    setUseProfileVoice,
-    effectiveArtDirection: artDirection,
-    effectiveReferenceUrls: selectedReferenceUrls,
-    loadCharacterProfiles,
-    onSelectCharacterProfile,
+    runCharacters,
+    selectedProfiles,
+    artDirection,
+    frameSheetReadiness,
+    muapiVideoReadiness,
+    refreshCharacterProfiles,
+    onToggleRunProfile,
+    isProfileSelectedForRun,
     onArtDirectionChange,
     onCreateProfile,
     onUpdateProfile,
     deleteCharacterProfileFromLibrary,
     reuseProfileSheet,
-    saveSheetToSelectedProfile,
+    saveSheetToSelectedProfiles,
     restoreCharacterSnapshot,
-    fetchProfileVoiceDataUrl,
+    buildCharacterAnchors,
+    generateMuapiCharacterSheet,
     onUploadReference,
-    selectReferenceImage,
     deleteReferenceFromLibrary,
-    useSelectedReferenceDirectly,
+    referenceLibraryBusy,
   } = character;
+
+  const frameSheetBlockedReason = useMemo(
+    () => (frameSheetReadiness.ok ? null : frameSheetReadiness.reason),
+    [frameSheetReadiness],
+  );
+
+  const runProfileIds = useMemo(
+    () => runCharacters.map((run) => run.profileId),
+    [runCharacters],
+  );
 
   const {
     presets,
@@ -357,12 +375,12 @@ export function PipelineWizard() {
       }
       if (next === "character") {
         void loadReferenceImages();
-        void loadCharacterProfiles();
+        void refreshCharacterProfiles();
       }
     },
     [
       busy,
-      loadCharacterProfiles,
+      refreshCharacterProfiles,
       loadReferenceImages,
       loadSavedScripts,
       pendingVideoJob,
@@ -492,19 +510,42 @@ export function PipelineWizard() {
     [restoreCharacterSnapshot],
   );
 
-  useWizardLocalStorage<WizardSnapshot>({
+  const wizardStorageHydrated = useWizardLocalStorage<WizardSnapshot>({
     storageKey: WIZARD_STORAGE_KEY,
     restore: restoreSnapshot,
     snapshot,
   });
 
+  const stepNeedsCharacterLibrary =
+    step === "character" || step === "sheet" || step === "video";
+
+  const staleRunSelection =
+    runCharacters.length > 0 &&
+    selectedProfiles.length !== runCharacters.length;
+
+  useEffect(() => {
+    if (!wizardStorageHydrated || !stepNeedsCharacterLibrary) return;
+    void refreshCharacterProfiles();
+    void loadReferenceImages();
+  }, [
+    wizardStorageHydrated,
+    stepNeedsCharacterLibrary,
+    refreshCharacterProfiles,
+    loadReferenceImages,
+  ]);
+
+  useEffect(() => {
+    if (!wizardStorageHydrated || !staleRunSelection) return;
+    void refreshCharacterProfiles();
+  }, [wizardStorageHydrated, staleRunSelection, refreshCharacterProfiles]);
+
   const continueToCharacter = useCallback(async () => {
     await continueToCharacterStep();
     void loadReferenceImages();
-    void loadCharacterProfiles();
+    void refreshCharacterProfiles();
   }, [
     continueToCharacterStep,
-    loadCharacterProfiles,
+    refreshCharacterProfiles,
     loadReferenceImages,
   ]);
 
@@ -516,11 +557,17 @@ export function PipelineWizard() {
 
   const { generateSheet, startVideo } = useWizardSheetVideoGeneration({
     runApiAction,
+    setError,
+    setFrameSheetGenerationBusy,
     maybeSaveGeneratedScript,
     scriptEdit,
     artDirection,
-    selectedReferenceUrls,
-    saveSheetToSelectedProfile,
+    runProfileIds,
+    characterProfiles,
+    saveSheetToSelectedProfiles,
+    buildCharacterAnchors,
+    frameSheetReadiness,
+    muapiVideoReadiness,
     trackSheetScriptSelection,
     setSheetUrl,
     setSheetSource,
@@ -528,9 +575,6 @@ export function PipelineWizard() {
     sheetUrl,
     videoProvider,
     muapiAudioDataUrls,
-    useProfileVoice,
-    selectedCharacterProfile,
-    fetchProfileVoiceDataUrl,
     setVideoGenerationBusy,
     setSubtitleSrt,
     setSubtitleChars,
@@ -691,37 +735,30 @@ export function PipelineWizard() {
       {step === "character" ? (
         <CharacterStep
           busy={busy}
+          generatingFrameSheet={frameSheetGenerationBusy}
           library={{
             profiles: characterProfiles,
             loadingProfiles: loadingCharacterProfiles,
-            selectedProfileId: selectedCharacterProfileId,
-            selectedProfile: selectedCharacterProfile,
+            isProfileSelectedForRun,
+            runCharacterCount: runCharacters.length,
+            staleRunSelection,
             referenceImages,
             loadingReferenceImages,
-            onSelectProfile: onSelectCharacterProfile,
+            referenceLibraryBusy,
+            onToggleRunProfile,
             onDeleteProfile: (profile) =>
               void deleteCharacterProfileFromLibrary(profile),
-            onRefreshProfiles: () => void loadCharacterProfiles(),
             onCreateProfile,
             onUpdateProfile,
             onUploadReference,
-            onRefreshReferences: () => void loadReferenceImages(),
+            onDeleteReference: (item) => void deleteReferenceFromLibrary(item),
+            onGenerateMuapiCharacterSheet: generateMuapiCharacterSheet,
           }}
           runSetup={{
             artDirection,
-            referenceImages,
-            selectedReferenceUrls,
-            loadingReferenceImages,
-            selectedProfile: selectedCharacterProfile,
-            useProfileVoice,
+            selectedProfiles,
+            generateBlockedReason: frameSheetBlockedReason,
             onArtDirectionChange,
-            onUploadReference,
-            onRefreshReferences: () => void loadReferenceImages(),
-            onToggleReferenceUrl: selectReferenceImage,
-            onDeleteReferenceImage: (item) =>
-              void deleteReferenceFromLibrary(item),
-            onUseProfileVoiceChange: setUseProfileVoice,
-            onUseSelectedReferenceDirectly: useSelectedReferenceDirectly,
             onReuseProfileSheet: reuseProfileSheet,
             onGenerateSheet: () => void generateSheet(),
           }}
@@ -730,9 +767,9 @@ export function PipelineWizard() {
         <WizardSummaryCard
           title="Character Ready"
           detail={
-            selectedCharacterProfile
-              ? selectedCharacterProfile.name
-              : "One-off run (no profile)"
+            selectedProfiles.length
+              ? selectedProfiles.map((p) => p.name).join(", ")
+              : "No characters selected"
           }
           onEdit={() => navigateToStep("character")}
         />
@@ -752,8 +789,11 @@ export function PipelineWizard() {
           videoGenerationBusy={videoGenerationBusy || Boolean(pendingVideoJob)}
           muapiAudioFileNames={muapiAudioFileNames}
           profileVoiceName={
-            useProfileVoice && selectedCharacterProfile?.voiceSample
-              ? selectedCharacterProfile.voiceSample.originalName
+            videoProvider === "muapi" && selectedProfiles.length && !muapiAudioFileNames.length
+              ? selectedProfiles
+                  .filter((p) => p.voiceSample)
+                  .map((p) => p.name)
+                  .join(", ") || null
               : null
           }
           onMuapiAudioFilesChange={onMuapiAudioFilesChange}

@@ -36,6 +36,11 @@ export type PendingVideoJob = {
   title?: string;
 };
 
+export type RunCharacterSelection = {
+  profileId: string;
+  extraReferenceUrls: string[];
+};
+
 export type WizardSnapshot = {
   isScriptSidebarOpen: boolean;
   step: Step;
@@ -53,13 +58,16 @@ export type WizardSnapshot = {
   selectedId: string | null;
   scriptEdit: { title: string; body: string };
   artDirection: string;
-  /** Selected Character Profile for this run; null = one-off run without a profile. */
-  selectedCharacterProfileId: string | null;
-  /** Auto-attach the selected profile's voice sample to the MuAPI video request. */
-  useProfileVoice: boolean;
+  /** @deprecated Migrated to runCharacters on restore. */
+  selectedCharacterProfileId?: string | null;
+  useProfileVoice?: boolean;
+  /** @deprecated Migrated to runCharacters on restore. */
+  selectedReferenceUrls?: string[];
+  /** @deprecated Removed; extras are per-run on runCharacters.extraReferenceUrls. */
+  videoExtraReferenceUrls?: string[];
+  runCharacters: RunCharacterSelection[];
   sheetUrl: string | null;
   sheetSource: "generated" | "uploaded";
-  selectedReferenceUrls: string[];
   sheetScriptHistory: SheetScriptHistoryEntry[];
   videoUrl: string | null;
   videoMeta: { predictionId: string } | null;

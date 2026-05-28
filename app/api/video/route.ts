@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { buildServerVideoPlan } from "@/lib/pipeline/resolve-video-run";
 import { maxMuapiAudioBytesPerFile, videoRequestSchema, type VideoProvider } from "@/lib/schemas";
 import { getEnv } from "@/lib/env";
 import { requireUser } from "@/lib/auth/require-user";
@@ -302,14 +303,20 @@ export async function POST(req: Request) {
       req,
       provider,
     );
-    const imageUrls = sheetImageUrl ? [sheetImageUrl] : [];
-
-    if (!imageUrls.length) {
-      throw new Error("Could not resolve image URL for video generation");
+    if (!sheetImageUrl) {
+      throw new Error("Could not resolve frame sequence sheet URL for video generation");
     }
 
+    const plan = await buildServerVideoPlan({
+      frameSheetUrl: sheetImageUrl,
+      runProfileIds: body.runProfileIds,
+      userId: auth.user.id,
+      provider,
+      resolveImageUrl: (raw) => resolveImageUrl(raw, req, provider),
+    });
+
     if (provider === "muapi") {
-      if (imageUrls.some((u) => u.startsWith("asset://"))) {
+      if (plan.imageUrls.some((u) => u.startsWith("asset://"))) {
         return NextResponse.json(
           {
             error:
@@ -348,8 +355,11 @@ export async function POST(req: Request) {
       const predictionId = await startMuapiVideoJob({
         scriptTitle: body.scriptTitle,
         scriptBody: body.scriptBody,
-        imageUrls,
+        imageUrls: plan.imageUrls,
         audioUrls: audioUrls.length ? audioUrls : undefined,
+        imageSlots: plan.imageSlots,
+        audioSlots: plan.audioSlots,
+        muapiCharacterRequestIds: plan.muapiCharacterRequestIds,
       });
       await trackPrediction(predictionId, auth.user.id, "muapi");
       return NextResponse.json({
@@ -360,9 +370,10 @@ export async function POST(req: Request) {
     }
 
     const preparedImageRefs =
-      canAutoAssetize(env) && imageUrls.some((url) => !url.startsWith("asset://"))
-        ? await assetizeImageUrls(imageUrls)
-        : imageUrls;
+      canAutoAssetize(env) &&
+      plan.imageUrls.some((url) => !url.startsWith("asset://"))
+        ? await assetizeImageUrls(plan.imageUrls)
+        : plan.imageUrls;
 
     let predictionId: string;
     try {

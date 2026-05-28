@@ -15,19 +15,40 @@ export async function POST(req: Request) {
 
     const json = await req.json();
     const input = frameSequenceSheetRequestSchema.parse(json);
-    const normalizedRefUrls = (input.referenceImageUrls ?? []).map((url) =>
+    const normalizeUrl = (url: string) =>
       url.trim().startsWith("/")
         ? new URL(url.trim(), req.url).toString()
-        : url.trim(),
+        : url.trim();
+
+    const normalizedRefUrls = (input.referenceImageUrls ?? []).map(normalizeUrl);
+    const anchors = input.characterAnchors ?? [];
+    const anchorSheetUrls = anchors.map((a) => normalizeUrl(a.characterSheetUrl));
+    const anchorExtraRefs = anchors.flatMap((a) =>
+      (a.referenceImageUrls ?? []).map(normalizeUrl),
     );
+    const openAiImageUrls = [
+      ...anchorSheetUrls,
+      ...anchorExtraRefs,
+      ...normalizedRefUrls,
+    ].slice(0, 9);
+
     const prompt = buildFrameSequenceSheetPrompt({
-      ...input,
-      referenceImageUrls: normalizedRefUrls,
+      scriptTitle: input.scriptTitle,
+      scriptBody: input.scriptBody,
+      artDirection: input.artDirection,
+      referenceImageUrls: openAiImageUrls.length ? openAiImageUrls : undefined,
+      characterAnchors: anchors.length
+        ? anchors.map((a) => ({
+            name: a.name,
+            characterSheetUrl: normalizeUrl(a.characterSheetUrl),
+            referenceImageUrls: a.referenceImageUrls?.map(normalizeUrl),
+          }))
+        : undefined,
     });
     const { dataUrl, mimeType } = await generateFrameSequenceSheetWithOpenAI({
       prompt,
       requestUrl: req.url,
-      referenceImageUrls: normalizedRefUrls,
+      referenceImageUrls: openAiImageUrls.length ? openAiImageUrls : undefined,
     });
 
     return NextResponse.json({ mimeType, imageDataUrl: dataUrl });

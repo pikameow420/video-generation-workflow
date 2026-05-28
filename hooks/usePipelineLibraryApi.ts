@@ -23,6 +23,8 @@ export function usePipelineLibraryApi(options: {
 }): {
   loadReferenceImages: () => Promise<void>;
   loadSavedScripts: () => Promise<void>;
+  upsertReferenceImage: (record: ReferenceImage) => void;
+  removeReferenceImage: (id: string) => void;
 } {
   const {
     setReferenceImages,
@@ -75,5 +77,27 @@ export function usePipelineLibraryApi(options: {
     setSavedScriptsLoaded,
   ]);
 
-  return { loadReferenceImages, loadSavedScripts };
+  const upsertReferenceImage = useCallback(
+    (record: ReferenceImage) => {
+      setReferenceImages((prev) => {
+        const without = prev.filter((item) => item.id !== record.id);
+        return [record, ...without];
+      });
+    },
+    [setReferenceImages],
+  );
+
+  const removeReferenceImage = useCallback(
+    (id: string) => {
+      setReferenceImages((prev) => prev.filter((item) => item.id !== id));
+    },
+    [setReferenceImages],
+  );
+
+  return {
+    loadReferenceImages,
+    loadSavedScripts,
+    upsertReferenceImage,
+    removeReferenceImage,
+  };
 }

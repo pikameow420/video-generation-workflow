@@ -1,51 +1,35 @@
 "use client";
 
-import type { ChangeEvent } from "react";
-
-import type { CharacterProfile, ReferenceImage } from "@/components/pipeline/types";
-import { ReferenceLibraryPicker } from "@/components/pipeline/steps/character/ReferenceLibraryPicker";
+import type { CharacterProfile } from "@/components/pipeline/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { Mic } from "lucide-react";
 
 export type CharacterRunSetupProps = {
   busy: boolean;
+  generatingFrameSheet: boolean;
   artDirection: string;
   onArtDirectionChange: (v: string) => void;
-  referenceImages: ReferenceImage[];
-  selectedReferenceUrls: string[];
-  loadingReferenceImages: boolean;
-  onUploadReference: (e: ChangeEvent<HTMLInputElement>) => void;
-  onRefreshReferences: () => void;
-  onToggleReferenceUrl: (url: string) => void;
-  onDeleteReferenceImage: (item: ReferenceImage) => void;
-  useProfileVoice: boolean;
-  onUseProfileVoiceChange: (next: boolean) => void;
-  selectedProfile: CharacterProfile | null;
-  onUseSelectedReferenceDirectly: () => void;
+  selectedProfiles: CharacterProfile[];
+  generateBlockedReason: string | null;
   onGenerateSheet: () => void;
   onReuseProfileSheet: () => void;
 };
 
 export function CharacterRunSetup({
   busy,
+  generatingFrameSheet,
   artDirection,
   onArtDirectionChange,
-  referenceImages,
-  selectedReferenceUrls,
-  loadingReferenceImages,
-  onUploadReference,
-  onRefreshReferences,
-  onToggleReferenceUrl,
-  onDeleteReferenceImage,
-  useProfileVoice,
-  onUseProfileVoiceChange,
-  selectedProfile,
-  onUseSelectedReferenceDirectly,
+  selectedProfiles,
+  generateBlockedReason,
   onGenerateSheet,
   onReuseProfileSheet,
 }: CharacterRunSetupProps) {
+  const hasSavedFrameSheet = selectedProfiles.some((p) => p.sheetUrl);
+
   return (
     <>
       <div className="space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
@@ -54,7 +38,7 @@ export function CharacterRunSetup({
         </p>
         <div className="space-y-1.5">
           <Label htmlFor="art-direction-input">
-            Art Direction for Visuals (Optional)
+            Art Direction for Frame Sheet (Optional)
           </Label>
           <Input
             id="art-direction-input"
@@ -63,108 +47,85 @@ export function CharacterRunSetup({
             placeholder="e.g. flat vector mascot, soft 3D, cyberpunk palette"
           />
           <p className="text-xs text-zinc-500">
-            Image generation is billed separately.
+            Applies to the script-driven frame sequence sheet on the next step.
           </p>
         </div>
-        <div className="space-y-2">
-          <Label>Reference Photos For This Run</Label>
-          <p className="text-xs text-zinc-500">
-            Selected references steer frame sequence sheet generation only. Video uses
-            the sheet from the next step.
-          </p>
-          <ReferenceLibraryPicker
-            busy={busy}
-            referenceImages={referenceImages}
-            loadingReferenceImages={loadingReferenceImages}
-            onUploadReference={onUploadReference}
-            onRefreshReferences={onRefreshReferences}
-            isSelected={(item) => selectedReferenceUrls.includes(item.url)}
-            onToggle={(item) => onToggleReferenceUrl(item.url)}
-            onDelete={onDeleteReferenceImage}
-          />
-          {selectedReferenceUrls.length ? (
-            <div className="space-y-2">
-              <p className="text-xs text-zinc-500">
-                Selected references (remove individually):
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {selectedReferenceUrls.map((url) => {
-                  const label =
-                    referenceImages.find((item) => item.url === url)
-                      ?.originalName ??
-                    url.split("/").pop() ??
-                    "reference";
-                  return (
-                    <button
-                      key={url}
-                      type="button"
-                      onClick={() => onToggleReferenceUrl(url)}
-                      className="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                    >
-                      <span className="max-w-[180px] truncate">{label}</span>
-                      <span aria-hidden>×</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onUseSelectedReferenceDirectly}
-              disabled={busy || !selectedReferenceUrls.length}
-              className="rounded-full"
-            >
-              Use Selected Reference For Video
-            </Button>
-            {selectedReferenceUrls.length ? (
-              <span className="text-xs text-zinc-500">
-                {selectedReferenceUrls.length} reference
-                {selectedReferenceUrls.length > 1 ? "s" : ""} selected
-              </span>
-            ) : null}
+
+        {selectedProfiles.length ? (
+          <div className="space-y-2">
+            <Label>Characters in this run ({selectedProfiles.length})</Label>
+            <ul className="space-y-2 text-sm">
+              {selectedProfiles.map((profile) => (
+                <li
+                  key={profile.id}
+                  className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50"
+                >
+                  <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {profile.name}
+                  </span>
+                  {profile.muapiCharacterSheetUrl ? (
+                    <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                      character sheet
+                    </span>
+                  ) : (
+                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                      missing character sheet
+                    </span>
+                  )}
+                  {profile.voiceSample ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+                      <Mic className="h-3 w-3" aria-hidden /> voice
+                    </span>
+                  ) : (
+                    <span className="text-xs text-amber-600 dark:text-amber-400">
+                      missing voice
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-zinc-500">
+              Select up to 3 profiles. Each needs a character sheet and voice sample
+              before generating the frame sheet or video.
+            </p>
           </div>
-        </div>
-        {selectedProfile?.voiceSample ? (
-          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-            <input
-              type="checkbox"
-              checked={useProfileVoice}
-              disabled={busy}
-              onChange={(e) => onUseProfileVoiceChange(e.target.checked)}
-            />
-            Use this profile&apos;s voice sample (
-            {selectedProfile.voiceSample.originalName}) as @audio1 in the video
-          </label>
+        ) : (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Select one or more character profiles above to continue.
+          </p>
+        )}
+
+        {selectedProfiles.length > 0 && generateBlockedReason ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            {generateBlockedReason}
+          </p>
         ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-3 pt-2">
         <Button
           type="button"
-          disabled={busy}
+          disabled={busy || generatingFrameSheet || Boolean(generateBlockedReason)}
           onClick={onGenerateSheet}
           className="rounded-full px-6"
         >
-          {busy ? (
+          {generatingFrameSheet ? (
             <>
-              <Spinner className="mr-2 h-4 w-4" /> Generating Art...
+              <Spinner className="mr-2 h-4 w-4" /> Generating frame sheet...
             </>
           ) : (
             "Generate Frame Sequence Sheet"
           )}
         </Button>
-        {selectedProfile?.sheetUrl ? (
+        {hasSavedFrameSheet ? (
           <Button
             type="button"
             variant="outline"
-            disabled={busy}
+            disabled={busy || generatingFrameSheet}
             onClick={onReuseProfileSheet}
             className="rounded-full"
           >
-            Reuse Saved Sheet
+            Reuse Saved Frame Sheet
           </Button>
         ) : null}
       </div>

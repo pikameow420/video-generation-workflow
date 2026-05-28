@@ -10,7 +10,6 @@ import {
 } from "@/lib/schemas";
 import { toast } from "sonner";
 
-/** MuAPI-only: optional @audio1 reference files (not persisted in localStorage). */
 export function useMuapiAudioAttachments() {
   const [muapiAudioDataUrls, setMuapiAudioDataUrls] = useState<string[]>([]);
   const [muapiAudioFileNames, setMuapiAudioFileNames] = useState<string[]>([]);

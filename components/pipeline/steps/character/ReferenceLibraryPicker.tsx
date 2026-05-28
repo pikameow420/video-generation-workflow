@@ -3,15 +3,13 @@
 import type { ChangeEvent } from "react";
 
 import type { ReferenceImage } from "@/components/pipeline/types";
-import { Button } from "@/components/ui/button";
 import { ReferenceGrid } from "./ReferenceGrid";
 
 export type ReferenceLibraryPickerProps = {
   busy: boolean;
   referenceImages: ReferenceImage[];
   loadingReferenceImages: boolean;
-  onUploadReference: (e: ChangeEvent<HTMLInputElement>) => void;
-  onRefreshReferences: () => void;
+  onUploadReference: (e: ChangeEvent<HTMLInputElement>) => Promise<unknown>;
   isSelected: (item: ReferenceImage) => boolean;
   onToggle: (item: ReferenceImage) => void;
   onDelete?: (item: ReferenceImage) => void;
@@ -24,7 +22,6 @@ export function ReferenceLibraryPicker({
   referenceImages,
   loadingReferenceImages,
   onUploadReference,
-  onRefreshReferences,
   isSelected,
   onToggle,
   onDelete,
@@ -46,21 +43,13 @@ export function ReferenceLibraryPicker({
             disabled={pickerBusy}
           />
         </label>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onRefreshReferences}
-          disabled={pickerBusy || loadingReferenceImages}
-          className="rounded-full"
-        >
-          {loadingReferenceImages ? "Refreshing..." : "Refresh Library"}
-        </Button>
         {selectedCount !== undefined ? (
           <span className="text-xs text-zinc-500">{selectedCount} selected</span>
         ) : null}
       </div>
       <ReferenceGrid
         busy={pickerBusy}
+        loading={loadingReferenceImages}
         referenceImages={referenceImages}
         isSelected={isSelected}
         onToggle={onToggle}

@@ -1,40 +1,32 @@
 "use client";
 
 import type { ChangeEvent, Dispatch, SetStateAction } from "react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { toast } from "sonner";
 
 import type {
   CharacterProfile,
   ReferenceImage,
+  RunCharacterSelection,
   WizardSnapshot,
 } from "@/components/pipeline/types";
-import type { RunApiAction } from "@/hooks/useApiAction";
 import { useCharacterProfiles } from "@/hooks/useCharacterProfiles";
 import { deleteJson, postForm } from "@/lib/api/client";
 import {
-  buildRunOverridesFromSnapshot,
-  dedupeReferenceUrls,
-  fetchVoiceSampleDataUrl,
-  normalizeReferenceUrl,
-  resolveRunReferenceUrls,
-  type CharacterRunOverrides,
+  assertRunReadyForFrameSheet,
+  assertRunReadyForMuapiVideo,
+} from "@/lib/pipeline/run-readiness";
+import {
+  buildCharacterAnchorsForSheet,
+  migrateWizardSnapshot,
+  toggleRunCharacter,
 } from "@/lib/pipeline/wizard-utils";
 import { referenceImageSchema } from "@/lib/schemas";
 
 type CharacterSnapshotFields = Pick<
   WizardSnapshot,
-  | "artDirection"
-  | "selectedCharacterProfileId"
-  | "useProfileVoice"
-  | "selectedReferenceUrls"
+  "artDirection" | "runCharacters"
 >;
 
 export type AdvanceToSheet = (args: {
@@ -46,19 +38,19 @@ export type AdvanceToSheet = (args: {
 type UseWizardCharacterStepOptions = {
   invalidateGeneratedOutputs: () => void;
   setError: Dispatch<SetStateAction<string | null>>;
-  runApiAction: RunApiAction;
-  loadReferenceImages: () => Promise<void>;
+  upsertReferenceImage: (record: ReferenceImage) => void;
+  removeReferenceImage: (id: string) => void;
   sheetUrl: string | null;
   advanceToSheet: AdvanceToSheet;
 };
 
-/** Character step state, run overrides, and CRUD for the pipeline wizard. */
+/** Character step state, multi-profile run selection, and CRUD for the pipeline wizard. */
 export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
   const {
     invalidateGeneratedOutputs,
     setError,
-    runApiAction,
-    loadReferenceImages,
+    upsertReferenceImage,
+    removeReferenceImage,
     sheetUrl,
     advanceToSheet,
   } = options;
@@ -68,11 +60,11 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
   );
   const [loadingCharacterProfiles, setLoadingCharacterProfiles] =
     useState(false);
-  const [selectedCharacterProfileId, setSelectedCharacterProfileId] = useState<
-    string | null
-  >(null);
-  const [useProfileVoice, setUseProfileVoice] = useState(true);
-  const [runOverrides, setRunOverrides] = useState<CharacterRunOverrides>({});
+  const [runCharacters, setRunCharacters] = useState<RunCharacterSelection[]>(
+    [],
+  );
+  const [artDirection, setArtDirection] = useState("");
+  const [referenceLibraryBusy, setReferenceLibraryBusy] = useState(false);
 
   const {
     loadCharacterProfiles,
@@ -80,112 +72,79 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
     submitCreateProfile,
     submitUpdateProfile,
     saveProfileSheet,
+    generateMuapiCharacterSheet,
   } = useCharacterProfiles({
     setCharacterProfiles,
     setLoadingCharacterProfiles,
     setError,
   });
 
-  const selectedCharacterProfile =
-    characterProfiles.find((profile) => profile.id === selectedCharacterProfileId) ??
-    null;
-
-  const effectiveArtDirection =
-    runOverrides.artDirection ?? selectedCharacterProfile?.artDirection ?? "";
-
-  const effectiveReferenceUrls = resolveRunReferenceUrls(
-    runOverrides,
-    selectedCharacterProfile,
+  const selectedProfiles = useMemo(
+    () =>
+      runCharacters
+        .map((run) => characterProfiles.find((p) => p.id === run.profileId))
+        .filter((p): p is CharacterProfile => p !== undefined),
+    [characterProfiles, runCharacters],
   );
 
   const snapshotFields = useMemo<CharacterSnapshotFields>(
     () => ({
-      artDirection: effectiveArtDirection,
-      selectedCharacterProfileId,
-      useProfileVoice,
-      selectedReferenceUrls: effectiveReferenceUrls,
+      artDirection,
+      runCharacters,
     }),
-    [
-      effectiveArtDirection,
-      effectiveReferenceUrls,
-      selectedCharacterProfileId,
-      useProfileVoice,
-    ],
+    [artDirection, runCharacters],
   );
 
   const restoreCharacterSnapshot = useCallback(
-    (loaded: Partial<CharacterSnapshotFields>) => {
-      if (loaded.selectedCharacterProfileId !== undefined) {
-        setSelectedCharacterProfileId(loaded.selectedCharacterProfileId);
+    (loaded: Partial<WizardSnapshot>) => {
+      const migrated = migrateWizardSnapshot(loaded);
+      if (migrated.artDirection !== undefined) {
+        setArtDirection(migrated.artDirection);
       }
-      if (loaded.useProfileVoice !== undefined) {
-        setUseProfileVoice(loaded.useProfileVoice);
+      if (migrated.runCharacters !== undefined) {
+        setRunCharacters(migrated.runCharacters);
       }
-      setRunOverrides(
-        buildRunOverridesFromSnapshot({
-          artDirection: loaded.artDirection,
-          selectedReferenceUrls: loaded.selectedReferenceUrls,
-        }),
-      );
     },
     [],
   );
 
-  /** After a localStorage restore, the selected profile's refs/voice live server-side — fetch once. */
-  const attemptedProfileRestore = useRef(false);
-  useEffect(() => {
-    if (attemptedProfileRestore.current) return;
-    if (!selectedCharacterProfileId) return;
-    attemptedProfileRestore.current = true;
-    void loadCharacterProfiles();
-  }, [selectedCharacterProfileId, loadCharacterProfiles]);
+  /** Load profiles from API and drop run selections that no longer exist. */
+  const refreshCharacterProfiles = useCallback(async () => {
+    const items = await loadCharacterProfiles();
+    setRunCharacters((prev) =>
+      prev.filter((run) => items.some((profile) => profile.id === run.profileId)),
+    );
+  }, [loadCharacterProfiles]);
 
-  const applyCharacterProfile = useCallback(
+  const onToggleRunProfile = useCallback(
     (profile: CharacterProfile) => {
       invalidateGeneratedOutputs();
-      setSelectedCharacterProfileId(profile.id);
-      setRunOverrides({});
-      setUseProfileVoice(true);
+      setRunCharacters((prev) => {
+        const exists = prev.some((r) => r.profileId === profile.id);
+        if (!exists && prev.length >= 3) {
+          toast.error("At most 3 characters per run.");
+          return prev;
+        }
+        const next = toggleRunCharacter(prev, profile.id, profile);
+        if (next.length > prev.length) {
+          toast.success(
+            next.length === 1
+              ? `Added "${profile.name}" to this run.`
+              : `${next.length} characters selected for this run.`,
+          );
+        }
+        return next;
+      });
     },
     [invalidateGeneratedOutputs],
   );
 
-  const onSelectCharacterProfile = useCallback(
-    (id: string | null) => {
-      if (id === null) {
-        invalidateGeneratedOutputs();
-        setSelectedCharacterProfileId(null);
-        setRunOverrides({});
-        return;
-      }
-      const profile = characterProfiles.find((item) => item.id === id);
-      if (!profile) return;
-      applyCharacterProfile(profile);
-      toast.success(`Using character profile "${profile.name}".`);
-    },
-    [applyCharacterProfile, characterProfiles, invalidateGeneratedOutputs],
-  );
-
-  const setArtDirectionOverride = useCallback(
-    (next: SetStateAction<string>) => {
-      setRunOverrides((prev) => {
-        const current =
-          prev.artDirection ?? selectedCharacterProfile?.artDirection ?? "";
-        const value = typeof next === "function" ? next(current) : next;
-        return { ...prev, artDirection: value };
-      });
-    },
-    [selectedCharacterProfile],
-  );
-
   const onArtDirectionChange = useCallback(
     (next: string) => {
-      if (next !== effectiveArtDirection) {
-        invalidateGeneratedOutputs();
-      }
-      setArtDirectionOverride(next);
+      if (next !== artDirection) invalidateGeneratedOutputs();
+      setArtDirection(next);
     },
-    [effectiveArtDirection, invalidateGeneratedOutputs, setArtDirectionOverride],
+    [artDirection, invalidateGeneratedOutputs],
   );
 
   const onCreateProfile = useCallback(
@@ -195,8 +154,14 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
       referenceImageIds: string[];
       voiceFile: File | null;
     }): Promise<boolean> =>
-      submitCreateProfile(input, { onSuccess: applyCharacterProfile }),
-    [applyCharacterProfile, submitCreateProfile],
+      submitCreateProfile(input, {
+        onSuccess: (created) => {
+          setRunCharacters((prev) =>
+            toggleRunCharacter(prev, created.id, created),
+          );
+        },
+      }),
+    [submitCreateProfile],
   );
 
   const onUpdateProfile = useCallback(
@@ -209,70 +174,75 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
         voiceFile: File | null;
         removeVoiceSample: boolean;
       },
-    ): Promise<boolean> =>
-      submitUpdateProfile(id, input, {
-        onSuccess: (updated) => {
-          if (selectedCharacterProfileId === updated.id) {
-            applyCharacterProfile(updated);
-          }
-        },
-      }),
-    [applyCharacterProfile, selectedCharacterProfileId, submitUpdateProfile],
+    ): Promise<boolean> => submitUpdateProfile(id, input),
+    [submitUpdateProfile],
   );
 
   const deleteCharacterProfileFromLibrary = useCallback(
     async (profile: CharacterProfile) => {
-      await runApiAction(async () => {
+      setReferenceLibraryBusy(true);
+      try {
         await deleteCharacterProfile(profile.id);
-        if (selectedCharacterProfileId === profile.id) {
-          invalidateGeneratedOutputs();
-          setSelectedCharacterProfileId(null);
-          setRunOverrides({});
-        }
+        setRunCharacters((prev) =>
+          prev.filter((item) => item.profileId !== profile.id),
+        );
         toast.success(`Character profile "${profile.name}" deleted.`);
-      }, "Delete failed");
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Delete failed";
+        setError(message);
+        toast.error(message);
+      } finally {
+        setReferenceLibraryBusy(false);
+      }
     },
-    [
-      deleteCharacterProfile,
-      invalidateGeneratedOutputs,
-      runApiAction,
-      selectedCharacterProfileId,
-    ],
+    [deleteCharacterProfile, setError],
   );
 
   const reuseProfileSheet = useCallback(() => {
-    const saved = selectedCharacterProfile?.sheetUrl;
+    const saved = selectedProfiles.find((p) => p.sheetUrl)?.sheetUrl;
     if (!saved) return;
     advanceToSheet({
       sheetUrl: saved,
       sheetSource: "generated",
       trackHistory: true,
     });
-    toast.success("Reusing the profile's saved frame sequence sheet.");
-  }, [advanceToSheet, selectedCharacterProfile]);
+    toast.success("Reusing a saved frame sequence sheet from a selected profile.");
+  }, [advanceToSheet, selectedProfiles]);
 
-  const saveSheetToSelectedProfile = useCallback(
+  const saveSheetToSelectedProfiles = useCallback(
     async (imageDataUrl: string) => {
-      if (!selectedCharacterProfileId) return;
-      await saveProfileSheet(selectedCharacterProfileId, imageDataUrl);
+      for (const run of runCharacters) {
+        await saveProfileSheet(run.profileId, imageDataUrl);
+      }
     },
-    [saveProfileSheet, selectedCharacterProfileId],
+    [runCharacters, saveProfileSheet],
   );
 
-  const fetchProfileVoiceDataUrl = useCallback(async (): Promise<string | null> => {
-    const voice = selectedCharacterProfile?.voiceSample;
-    if (!voice) return null;
-    return fetchVoiceSampleDataUrl(voice);
-  }, [selectedCharacterProfile]);
+  const buildCharacterAnchors = useCallback(
+    () => buildCharacterAnchorsForSheet(runCharacters, characterProfiles),
+    [characterProfiles, runCharacters],
+  );
+
+  const frameSheetReadiness = useMemo(
+    () => assertRunReadyForFrameSheet(runCharacters, characterProfiles),
+    [characterProfiles, runCharacters],
+  );
+
+  const muapiVideoReadiness = useMemo(
+    () => assertRunReadyForMuapiVideo(runCharacters, characterProfiles),
+    [characterProfiles, runCharacters],
+  );
 
   const onUploadReference = useCallback(
-    async (e: ChangeEvent<HTMLInputElement>) => {
+    async (e: ChangeEvent<HTMLInputElement>): Promise<ReferenceImage | null> => {
       const file = e.target.files?.[0];
       e.currentTarget.value = "";
-      if (!file) return;
+      if (!file) return null;
 
       toast.info("Uploading reference image...");
-      await runApiAction(async () => {
+      setReferenceLibraryBusy(true);
+      try {
         const formData = new FormData();
         formData.set("file", file);
         const data = await postForm(
@@ -282,112 +252,77 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
           referenceImageSchema,
         );
         if (!data.url) throw new Error("Upload failed: missing url");
-        invalidateGeneratedOutputs();
-        setRunOverrides((prev) => ({
-          ...prev,
-          referenceUrls: dedupeReferenceUrls([
-            String(data.url),
-            ...resolveRunReferenceUrls(prev, selectedCharacterProfile),
-          ]),
-        }));
-        await loadReferenceImages();
+        upsertReferenceImage(data);
         toast.success("Reference image uploaded.");
-      }, "Upload failed");
+        return data;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Upload failed";
+        setError(message);
+        toast.error(message);
+        return null;
+      } finally {
+        setReferenceLibraryBusy(false);
+      }
     },
-    [
-      invalidateGeneratedOutputs,
-      loadReferenceImages,
-      runApiAction,
-      selectedCharacterProfile,
-    ],
-  );
-
-  const selectReferenceImage = useCallback(
-    (url: string) => {
-      const normalized = normalizeReferenceUrl(url);
-      invalidateGeneratedOutputs();
-      setRunOverrides((prev) => {
-        const current = resolveRunReferenceUrls(prev, selectedCharacterProfile);
-        const next = current.includes(normalized)
-          ? current.filter((item) => item !== normalized)
-          : dedupeReferenceUrls([normalized, ...current]);
-        return { ...prev, referenceUrls: next };
-      });
-    },
-    [invalidateGeneratedOutputs, selectedCharacterProfile],
+    [setError, upsertReferenceImage],
   );
 
   const deleteReferenceFromLibrary = useCallback(
     async (item: ReferenceImage) => {
-      await runApiAction(async () => {
+      setReferenceLibraryBusy(true);
+      try {
         await deleteJson(
           `/api/reference-images?id=${encodeURIComponent(item.id)}`,
           "Failed to delete reference image",
         );
-        const wasSelected = effectiveReferenceUrls.some(
-          (url) => normalizeReferenceUrl(url) === normalizeReferenceUrl(item.url),
-        );
         const wasUsedAsSheet = Boolean(
-          sheetUrl &&
-            normalizeReferenceUrl(sheetUrl) === normalizeReferenceUrl(item.url),
+          sheetUrl && sheetUrl.includes(item.url),
         );
-        if (wasSelected || wasUsedAsSheet) {
-          invalidateGeneratedOutputs();
-        }
-        setRunOverrides((prev) => {
-          const current = resolveRunReferenceUrls(prev, selectedCharacterProfile);
-          return {
-            ...prev,
-            referenceUrls: current.filter(
-              (url) =>
-                normalizeReferenceUrl(url) !== normalizeReferenceUrl(item.url),
-            ),
-          };
-        });
-        await loadReferenceImages();
+        if (wasUsedAsSheet) invalidateGeneratedOutputs();
+        removeReferenceImage(item.id);
         toast.success("Reference removed from library.");
-      }, "Delete failed");
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Delete failed";
+        setError(message);
+        toast.error(message);
+      } finally {
+        setReferenceLibraryBusy(false);
+      }
     },
-    [
-      effectiveReferenceUrls,
-      invalidateGeneratedOutputs,
-      loadReferenceImages,
-      runApiAction,
-      selectedCharacterProfile,
-      sheetUrl,
-    ],
+    [invalidateGeneratedOutputs, removeReferenceImage, setError, sheetUrl],
   );
 
-  const useSelectedReferenceDirectly = useCallback(() => {
-    const first = effectiveReferenceUrls[0];
-    if (!first) return;
-    advanceToSheet({ sheetUrl: first, sheetSource: "uploaded" });
-  }, [advanceToSheet, effectiveReferenceUrls]);
+  const isProfileSelectedForRun = useCallback(
+    (profileId: string) => runCharacters.some((r) => r.profileId === profileId),
+    [runCharacters],
+  );
 
   return {
     characterProfiles,
     loadingCharacterProfiles,
-    selectedCharacterProfileId,
-    selectedCharacterProfile,
-    useProfileVoice,
-    setUseProfileVoice,
-    effectiveArtDirection,
-    effectiveReferenceUrls,
+    runCharacters,
+    selectedProfiles,
+    artDirection,
     snapshotFields,
     restoreCharacterSnapshot,
-    loadCharacterProfiles,
-    onSelectCharacterProfile,
+    refreshCharacterProfiles,
+    onToggleRunProfile,
+    isProfileSelectedForRun,
     onArtDirectionChange,
-    setArtDirectionOverride,
+    setArtDirectionOverride: setArtDirection,
     onCreateProfile,
     onUpdateProfile,
     deleteCharacterProfileFromLibrary,
     reuseProfileSheet,
-    saveSheetToSelectedProfile,
-    fetchProfileVoiceDataUrl,
+    saveSheetToSelectedProfiles,
+    buildCharacterAnchors,
+    frameSheetReadiness,
+    muapiVideoReadiness,
+    generateMuapiCharacterSheet,
     onUploadReference,
-    selectReferenceImage,
     deleteReferenceFromLibrary,
-    useSelectedReferenceDirectly,
+    referenceLibraryBusy,
   };
 }

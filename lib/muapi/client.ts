@@ -5,11 +5,9 @@
  */
 
 import { getEnv } from "@/lib/env";
+import type { VideoAudioSlot, VideoImageSlot } from "@/lib/pipeline/video-image-slots";
 import { buildMuapiOmniReferencePrompt } from "@/lib/prompts/video";
-
-function apiV1Root(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, "")}/api/v1`;
-}
+import { muapiV1Root, postMuapiJson } from "@/lib/muapi/http";
 
 function extractUploadUrl(json: Record<string, unknown>): string {
   const u =
@@ -35,7 +33,7 @@ export async function uploadMuapiFile(params: {
   filename: string;
   contentType: string;
 }): Promise<{ url: string }> {
-  const root = apiV1Root(params.baseUrl);
+  const root = muapiV1Root(params.baseUrl);
   const file = new File(
     [new Uint8Array(params.buffer)],
     params.filename,
@@ -65,24 +63,6 @@ export async function uploadMuapiFile(params: {
   return { url: extractUploadUrl(json) };
 }
 
-function extractRequestId(json: Record<string, unknown>): string {
-  const id =
-    json.request_id ??
-    json.requestId ??
-    json.id ??
-    (typeof json.data === "object" &&
-    json.data !== null &&
-    "request_id" in json.data
-      ? (json.data as { request_id?: string }).request_id
-      : undefined);
-  if (!id || typeof id !== "string") {
-    throw new Error(
-      `MuAPI job start: missing request_id (${JSON.stringify(json).slice(0, 500)})`,
-    );
-  }
-  return id;
-}
-
 export async function startMuapiOmniReferenceJob(params: {
   apiKey: string;
   baseUrl: string;
@@ -94,7 +74,7 @@ export async function startMuapiOmniReferenceJob(params: {
   /** Public HTTPS URLs from MuAPI `upload_file`, same order as @audioN in prompt. */
   audioFileUrls?: string[];
 }): Promise<string> {
-  const root = apiV1Root(params.baseUrl);
+  const root = muapiV1Root(params.baseUrl);
   const path = params.endpoint.replace(/^\/+/, "");
   const body: Record<string, unknown> = {
     prompt: params.prompt,
@@ -107,34 +87,14 @@ export async function startMuapiOmniReferenceJob(params: {
     body.audio_files = audio;
   }
 
-  const res = await fetch(`${root}/${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": params.apiKey,
-    },
-    body: JSON.stringify(body),
+  const { requestId } = await postMuapiJson({
+    apiKey: params.apiKey,
+    baseUrl: params.baseUrl,
+    path,
+    body,
+    context: "MuAPI omni reference job",
   });
-
-  const text = await res.text();
-  let json: Record<string, unknown> = {};
-  try {
-    json = JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    json = {};
-  }
-
-  if (!res.ok) {
-    if (res.status === 402) {
-      throw new Error("MuAPI: insufficient credits — add balance at muapi.ai");
-    }
-    if (res.status === 429) {
-      throw new Error("MuAPI: rate limited — retry later.");
-    }
-    throw new Error(`MuAPI ${path} failed (${res.status}): ${text || res.statusText}`);
-  }
-
-  return extractRequestId(json);
+  return requestId;
 }
 
 export type MuapiPredictionResult = {
@@ -151,7 +111,7 @@ export async function getMuapiPredictionResult(params: {
   baseUrl: string;
   requestId: string;
 }): Promise<{ ok: boolean; data: MuapiPredictionResult }> {
-  const root = apiV1Root(params.baseUrl);
+  const root = muapiV1Root(params.baseUrl);
   const res = await fetch(`${root}/predictions/${encodeURIComponent(params.requestId)}/result`, {
     headers: { "x-api-key": params.apiKey },
   });
@@ -215,6 +175,9 @@ export async function startMuapiVideoJob(options: {
   scriptBody: string;
   imageUrls: string[];
   audioUrls?: string[];
+  imageSlots?: VideoImageSlot[];
+  audioSlots?: VideoAudioSlot[];
+  muapiCharacterRequestIds?: { name: string; requestId: string }[];
 }): Promise<string> {
   const env = getEnv();
   const apiKey = env.MUAPI_API_KEY?.trim();
@@ -223,11 +186,25 @@ export async function startMuapiVideoJob(options: {
   }
 
   const audioUrls = options.audioUrls?.filter(Boolean) ?? [];
+  if (!options.imageSlots?.length) {
+    throw new Error("MuAPI video requires imageSlots aligned with imageUrls");
+  }
+  if (options.imageSlots.length !== options.imageUrls.length) {
+    throw new Error(
+      `MuAPI imageSlots length (${options.imageSlots.length}) must match imageUrls (${options.imageUrls.length})`,
+    );
+  }
+  const imageSlots = options.imageSlots;
+  const audioSlots =
+    options.audioSlots ??
+    audioUrls.map((_, i) => ({ name: `Speaker ${i + 1}`, profileId: `audio-${i}` }));
+
   const prompt = buildMuapiOmniReferencePrompt(
     options.scriptTitle,
     options.scriptBody,
-    options.imageUrls.length,
-    audioUrls.length,
+    imageSlots,
+    audioSlots.slice(0, 3),
+    options.muapiCharacterRequestIds ?? [],
   );
 
   return startMuapiOmniReferenceJob({
@@ -297,8 +274,13 @@ export async function waitForMuapiVideoFromScriptAndImageUrls(options: {
   const prompt = buildMuapiOmniReferencePrompt(
     options.scriptTitle,
     options.scriptBody,
-    options.imageUrls.length,
-    audioUrls.length,
+    options.imageUrls.map((_, i) =>
+      i === 0 ? { kind: "frameSheet" as const } : { kind: "extra" as const },
+    ),
+    audioUrls.map((_, i) => ({
+      name: `Speaker ${i + 1}`,
+      profileId: `audio-${i}`,
+    })),
   );
 
   const requestId = await startMuapiOmniReferenceJob({

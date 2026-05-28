@@ -67,6 +67,8 @@ const envSchema = z.object({
   MUAPI_VIDEO_ENDPOINT: z
     .string()
     .default("seedance-2-omni-reference-no-video-fast"),
+  /** Seedance 2 character sheet (playground sd-2-character). */
+  MUAPI_CHARACTER_ENDPOINT: z.string().default("seedance-2-character"),
   MUAPI_VIDEO_DURATION: z
     .string()
     .optional()

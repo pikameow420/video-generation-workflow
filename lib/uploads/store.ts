@@ -7,6 +7,7 @@ import { isSupabasePersistenceEnabled } from "@/lib/persistence/backend";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   createStorageSignedUrl,
+  downloadStorageObject,
   removeStorageObject,
   uploadStorageObject,
 } from "@/lib/supabase/storage";
@@ -132,6 +133,100 @@ function asIso(ts: unknown): string {
   return new Date(ts as never).toISOString();
 }
 
+const SIGN_CONCURRENCY = 5;
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  if (!items.length) return [];
+  const results: R[] = new Array(items.length);
+  let index = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (index < items.length) {
+      const i = index++;
+      results[i] = await fn(items[i]!);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+type ReferenceImageDbRow = {
+  id: string;
+  storage_path: string;
+  mime_type: string;
+  bytes: number;
+  original_name: string;
+  created_at: unknown;
+};
+
+function rowToRecord(
+  row: ReferenceImageDbRow,
+  url: string,
+): ReferenceImageRecord {
+  return {
+    id: row.id,
+    url,
+    mimeType: row.mime_type,
+    bytes: Number(row.bytes),
+    originalName: row.original_name,
+    createdAt: asIso(row.created_at),
+  };
+}
+
+async function signReferenceDbRows(
+  rows: ReferenceImageDbRow[],
+): Promise<ReferenceImageRecord[]> {
+  const env = getEnv();
+  const admin = createAdminClient();
+  const bucket = env.SUPABASE_REFERENCE_IMAGES_BUCKET;
+  const expires = env.SUPABASE_SIGNED_URL_EXPIRES_SEC;
+
+  return mapWithConcurrency(rows, SIGN_CONCURRENCY, async (row) => {
+    const objectPath =
+      typeof row.storage_path === "string" ? row.storage_path : "";
+    const url = await createStorageSignedUrl(admin, bucket, objectPath, expires);
+    return rowToRecord(row, url);
+  });
+}
+
+async function listReferenceImageDbRowsSupabase(
+  userId: string,
+): Promise<ReferenceImageDbRow[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("reference_images")
+    .select("id, storage_path, mime_type, bytes, original_name, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    throw new Error(`reference_images list failed: ${error.message}`);
+  }
+  return (data ?? []) as ReferenceImageDbRow[];
+}
+
+async function getReferenceImageDbRowsByIdsSupabase(
+  ids: string[],
+  userId: string,
+): Promise<ReferenceImageDbRow[]> {
+  if (!ids.length) return [];
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("reference_images")
+    .select("id, storage_path, mime_type, bytes, original_name, created_at")
+    .eq("user_id", userId)
+    .in("id", ids);
+  if (error) {
+    throw new Error(`reference_images read failed: ${error.message}`);
+  }
+  const byId = new Map((data ?? []).map((row) => [row.id as string, row as ReferenceImageDbRow]));
+  return ids
+    .map((id) => byId.get(id))
+    .filter((row): row is ReferenceImageDbRow => row !== undefined);
+}
+
 async function putReferenceImageSupabase(
   input: PutReferenceImageInput,
   userId: string,
@@ -183,35 +278,8 @@ async function putReferenceImageSupabase(
 }
 
 async function listReferenceImagesSupabase(userId: string): Promise<ReferenceImageRecord[]> {
-  const env = getEnv();
-  const admin = createAdminClient();
-  const bucket = env.SUPABASE_REFERENCE_IMAGES_BUCKET;
-  const expires = env.SUPABASE_SIGNED_URL_EXPIRES_SEC;
-  const { data, error } = await admin
-    .from("reference_images")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false});
-  if (error) {
-    throw new Error(`reference_images list failed: ${error.message}`);
-  }
-  if (!data?.length) return [];
-
-  const out: ReferenceImageRecord[] = [];
-  for (const row of data) {
-    const objectPath =
-      typeof row.storage_path === "string" ? row.storage_path : "";
-    const url = await createStorageSignedUrl(admin, bucket, objectPath, expires);
-    out.push({
-      id: row.id as string,
-      url,
-      mimeType: row.mime_type as string,
-      bytes: Number(row.bytes),
-      originalName: row.original_name as string,
-      createdAt: asIso(row.created_at),
-    });
-  }
-  return out;
+  const rows = await listReferenceImageDbRowsSupabase(userId);
+  return signReferenceDbRows(rows);
 }
 
 async function deleteReferenceImageSupabase(id: string, userId: string): Promise<void> {
@@ -280,6 +348,45 @@ export async function listReferenceImages(userId?: string): Promise<ReferenceIma
   return records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+export async function getReferenceImagesByIds(
+  ids: string[],
+  userId?: string,
+): Promise<ReferenceImageRecord[]> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return [];
+
+  if (isSupabasePersistenceEnabled()) {
+    if (!userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
+    const rows = await getReferenceImageDbRowsByIdsSupabase(unique, userId);
+    return signReferenceDbRows(rows);
+  }
+
+  const env = getEnv();
+  const indexPath = path.resolve(process.cwd(), env.REFERENCE_IMAGE_INDEX_PATH);
+  const records = await readIndex(indexPath);
+  const byId = new Map(records.map((item) => [item.id, item]));
+  return unique
+    .map((id) => byId.get(id))
+    .filter((item): item is ReferenceImageRecord => item !== undefined);
+}
+
+export async function buildReferenceImageMap(
+  ids: string[],
+  userId: string,
+): Promise<Map<string, ReferenceImageRecord>> {
+  const items = await getReferenceImagesByIds(ids, userId);
+  return new Map(items.map((item) => [item.id, item]));
+}
+
+export type DownloadedReferenceImage = {
+  id: string;
+  bytes: Uint8Array;
+  mimeType: string;
+  originalName: string;
+};
+
 function localFileNameFromRecordUrl(recordUrl: string): string {
   const trimmed = recordUrl.trim();
   try {
@@ -290,6 +397,100 @@ function localFileNameFromRecordUrl(recordUrl: string): string {
     /* fall through */
   }
   return path.basename(trimmed.split("?")[0] ?? trimmed);
+}
+
+async function downloadBytesFromLocalRecord(
+  record: ReferenceImageRecord,
+): Promise<Omit<DownloadedReferenceImage, "id">> {
+  const env = getEnv();
+
+  if (env.UPLOAD_BACKEND === "blob") {
+    const res = await fetch(record.url);
+    if (!res.ok) {
+      throw new Error(`Failed to download reference image (${res.status})`);
+    }
+    return {
+      bytes: new Uint8Array(await res.arrayBuffer()),
+      mimeType: record.mimeType,
+      originalName: record.originalName,
+    };
+  }
+
+  const fileName = localFileNameFromRecordUrl(record.url);
+  const absolutePath = path.resolve(process.cwd(), env.LOCAL_UPLOAD_DIR, fileName);
+  const bytes = await readFile(absolutePath);
+  return {
+    bytes: new Uint8Array(bytes),
+    mimeType: record.mimeType,
+    originalName: record.originalName,
+  };
+}
+
+function assertAllReferenceIdsFound(orderedIds: string[], foundIds: Set<string>): void {
+  const missing = orderedIds.find((id) => !foundIds.has(id));
+  if (missing) {
+    throw new ReferenceImageNotFoundError(missing);
+  }
+}
+
+export async function downloadReferenceImagesByIds(
+  ids: string[],
+  userId: string,
+): Promise<DownloadedReferenceImage[]> {
+  const ordered = ids.filter(Boolean).slice(0, 3);
+  if (!ordered.length) return [];
+
+  if (isSupabasePersistenceEnabled()) {
+    const rows = await getReferenceImageDbRowsByIdsSupabase(ordered, userId);
+    assertAllReferenceIdsFound(ordered, new Set(rows.map((row) => row.id)));
+
+    const env = getEnv();
+    const admin = createAdminClient();
+    const bucket = env.SUPABASE_REFERENCE_IMAGES_BUCKET;
+
+    return mapWithConcurrency(rows, SIGN_CONCURRENCY, async (row) => {
+      const { bytes, mimeType } = await downloadStorageObject(
+        admin,
+        bucket,
+        row.storage_path,
+      );
+      return {
+        id: row.id,
+        bytes,
+        mimeType: mimeType || row.mime_type,
+        originalName: row.original_name,
+      };
+    });
+  }
+
+  const env = getEnv();
+  const indexPath = path.resolve(process.cwd(), env.REFERENCE_IMAGE_INDEX_PATH);
+  const records = await readIndex(indexPath);
+  const byId = new Map(records.map((item) => [item.id, item]));
+  assertAllReferenceIdsFound(ordered, new Set(byId.keys()));
+
+  return Promise.all(
+    ordered.map(async (id) => {
+      const record = byId.get(id)!;
+      const downloaded = await downloadBytesFromLocalRecord(record);
+      return { id, ...downloaded };
+    }),
+  );
+}
+
+export async function downloadReferenceImage(
+  id: string,
+  userId: string,
+): Promise<Omit<DownloadedReferenceImage, "id">> {
+  const [item] = await downloadReferenceImagesByIds([id], userId);
+  if (!item) {
+    throw new ReferenceImageNotFoundError(id);
+  }
+  return {
+    bytes: item.bytes,
+    mimeType: item.mimeType,
+    originalName: item.originalName,
+  };
 }
 
 export class ReferenceImageNotFoundError extends Error {

@@ -4,11 +4,19 @@ import type { Dispatch, SetStateAction } from "react";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
-import type { CharacterProfile } from "@/lib/schemas";
-import { deleteJson, getJson, postForm, putForm, putJson } from "@/lib/api/client";
+import {
+  deleteJson,
+  getJson,
+  postForm,
+  postJson,
+  putForm,
+  putJson,
+} from "@/lib/api/client";
+import { mergeCharacterProfileLists } from "@/lib/character-profiles/merge-profiles";
 import {
   characterProfileListResponseSchema,
   characterProfileSchema,
+  type CharacterProfile,
 } from "@/lib/schemas";
 
 export type CreateCharacterProfilePayload = {
@@ -33,7 +41,7 @@ export function useCharacterProfiles(options: {
   setLoadingCharacterProfiles: Dispatch<SetStateAction<boolean>>;
   setError: Dispatch<SetStateAction<string | null>>;
 }): {
-  loadCharacterProfiles: () => Promise<void>;
+  loadCharacterProfiles: () => Promise<CharacterProfile[]>;
   createCharacterProfile: (
     payload: CreateCharacterProfilePayload,
   ) => Promise<CharacterProfile>;
@@ -52,10 +60,14 @@ export function useCharacterProfiles(options: {
     options?: ProfileSubmitOptions,
   ) => Promise<boolean>;
   saveProfileSheet: (id: string, imageDataUrl: string) => Promise<void>;
+  generateMuapiCharacterSheet: (
+    id: string,
+    options?: { referenceImageIds: string[] },
+  ) => Promise<CharacterProfile | null>;
 } {
   const { setCharacterProfiles, setLoadingCharacterProfiles, setError } = options;
 
-  const loadCharacterProfiles = useCallback(async () => {
+  const loadCharacterProfiles = useCallback(async (): Promise<CharacterProfile[]> => {
     try {
       setLoadingCharacterProfiles(true);
       const data = await getJson(
@@ -63,13 +75,20 @@ export function useCharacterProfiles(options: {
         "Could not load character profiles",
         characterProfileListResponseSchema,
       );
-      setCharacterProfiles(data.items ?? []);
+      const serverItems = data.items ?? [];
+      let merged: CharacterProfile[] = serverItems;
+      setCharacterProfiles((prev) => {
+        merged = mergeCharacterProfileLists(serverItems, prev);
+        return merged;
+      });
+      return merged;
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
           : "Failed to load character profiles",
       );
+      return [];
     } finally {
       setLoadingCharacterProfiles(false);
     }
@@ -242,6 +261,42 @@ export function useCharacterProfiles(options: {
     [setCharacterProfiles],
   );
 
+  const generateMuapiCharacterSheet = useCallback(
+    async (
+      id: string,
+      options?: { referenceImageIds: string[] },
+    ): Promise<CharacterProfile | null> => {
+      try {
+        setError(null);
+        toast.info("Generating character sheet…");
+        const body =
+          options?.referenceImageIds?.length
+            ? { referenceImageIds: options.referenceImageIds }
+            : {};
+        const updated = await postJson(
+          `/api/character-profiles/${encodeURIComponent(id)}/muapi-character-sheet`,
+          body,
+          "Could not generate character sheet",
+          characterProfileSchema,
+        );
+        setCharacterProfiles((prev) =>
+          prev.map((item) => (item.id === updated.id ? updated : item)),
+        );
+        toast.success("Character sheet ready.");
+        return updated;
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Could not generate character sheet";
+        setError(message);
+        toast.error(message);
+        return null;
+      }
+    },
+    [setCharacterProfiles, setError],
+  );
+
   return {
     loadCharacterProfiles,
     createCharacterProfile,
@@ -250,5 +305,6 @@ export function useCharacterProfiles(options: {
     submitCreateProfile,
     submitUpdateProfile,
     saveProfileSheet,
+    generateMuapiCharacterSheet,
   };
 }

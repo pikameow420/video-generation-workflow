@@ -32,4 +32,6 @@ export function useWizardLocalStorage<T>({
     if (!hydrated) return;
     window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
   }, [hydrated, snapshot, storageKey]);
+
+  return hydrated;
 }

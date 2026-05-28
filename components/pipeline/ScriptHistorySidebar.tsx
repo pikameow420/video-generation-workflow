@@ -61,7 +61,7 @@ export function ScriptHistorySidebar({
                 Script History
               </h3>
               <p className="mt-0.5 text-[11px] text-zinc-500">
-                First script visible, alternates tucked below.
+                Selected script visible, alternates tucked below.
               </p>
             </div>
             <Button
@@ -206,8 +206,8 @@ export function ScriptHistorySidebar({
               </div>
             ) : savedScriptsLoaded && !loadingSavedScripts ? (
               <p className="text-xs text-zinc-500">
-                No script has completed sheet generation yet. Generate a batch to see the
-                first script here.
+                No script has completed sheet generation yet. Generate a batch to see your
+                selected script here.
               </p>
             ) : null}
           </ScrollArea>

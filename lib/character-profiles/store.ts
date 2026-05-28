@@ -9,7 +9,12 @@ import {
   removeStorageObject,
   uploadStorageObject,
 } from "@/lib/supabase/storage";
-import { listReferenceImages } from "@/lib/uploads/store";
+import { normalizeIds } from "@/lib/character-profiles/profile-ids";
+import { resolveReferenceImages } from "@/lib/character-profiles/reference-resolve";
+import {
+  buildReferenceImageMap,
+  type ReferenceImageRecord,
+} from "@/lib/uploads/store";
 import {
   characterProfileSchema,
   type CharacterProfile,
@@ -67,9 +72,39 @@ type StoredCharacterProfile = {
   voiceSampleName: string | null;
   sheetStoragePath: string | null;
   sheetMimeType: string | null;
+  muapiCharacterRequestId?: string | null;
+  muapiCharacterSheetStoragePath?: string | null;
+  muapiCharacterSheetMimeType?: string | null;
+  muapiCharacterSheetUpdatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
+
+export type SaveMuapiCharacterSheetInput = {
+  requestId: string;
+  bytes: Uint8Array;
+  mimeType: string;
+};
+
+function referenceIdsChanged(
+  before: string[],
+  after: string[],
+): boolean {
+  if (before.length !== after.length) return true;
+  const a = [...before].sort();
+  const b = [...after].sort();
+  return a.some((id, i) => id !== b[i]);
+}
+
+async function clearMuapiCharacterSheetLocal(stored: StoredCharacterProfile): Promise<void> {
+  if (stored.muapiCharacterSheetStoragePath) {
+    await removeLocalAsset(stored.muapiCharacterSheetStoragePath);
+  }
+  stored.muapiCharacterRequestId = null;
+  stored.muapiCharacterSheetStoragePath = null;
+  stored.muapiCharacterSheetMimeType = null;
+  stored.muapiCharacterSheetUpdatedAt = null;
+}
 
 const AUDIO_MIME_TO_EXT: Record<string, string> = {
   "audio/mpeg": "mp3",
@@ -160,28 +195,6 @@ function asIso(ts: unknown): string {
   return new Date(ts as never).toISOString();
 }
 
-function normalizeIds(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.filter((item): item is string => typeof item === "string" && item.length > 0);
-}
-
-/** Anchor refs are stored by id; URLs are re-resolved at read time because signed URLs expire. */
-async function resolveReferenceImages(
-  ids: string[],
-  userId?: string,
-): Promise<CharacterProfileReference[]> {
-  if (!ids.length) return [];
-  const library = await listReferenceImages(userId);
-  const byId = new Map(library.map((item) => [item.id, item]));
-  const out: CharacterProfileReference[] = [];
-  for (const id of ids) {
-    const item = byId.get(id);
-    if (!item) continue;
-    out.push({ id: item.id, url: item.url, originalName: item.originalName });
-  }
-  return out;
-}
-
 // --- Local JSON index fallback -------------------------------------------------
 
 async function readIndex(indexPath: string): Promise<StoredCharacterProfile[]> {
@@ -258,6 +271,11 @@ async function toRecordLocal(
           }
         : null,
     sheetUrl: stored.sheetStoragePath ? localAssetUrl(stored.sheetStoragePath) : null,
+    muapiCharacterRequestId: stored.muapiCharacterRequestId ?? null,
+    muapiCharacterSheetUrl: stored.muapiCharacterSheetStoragePath
+      ? localAssetUrl(stored.muapiCharacterSheetStoragePath)
+      : null,
+    muapiCharacterSheetUpdatedAt: stored.muapiCharacterSheetUpdatedAt ?? null,
     createdAt: stored.createdAt,
     updatedAt: stored.updatedAt,
   });
@@ -275,6 +293,10 @@ type CharacterProfileRow = {
   voice_sample_name: string | null;
   sheet_storage_path: string | null;
   sheet_mime_type: string | null;
+  muapi_character_request_id: string | null;
+  muapi_character_sheet_storage_path: string | null;
+  muapi_character_sheet_mime_type: string | null;
+  muapi_character_sheet_updated_at: unknown;
   created_at: unknown;
   updated_at: unknown;
 };
@@ -282,6 +304,7 @@ type CharacterProfileRow = {
 async function toRecordSupabase(
   row: CharacterProfileRow,
   userId: string,
+  refById?: Map<string, ReferenceImageRecord>,
 ): Promise<CharacterProfile> {
   const env = getEnv();
   const admin = createAdminClient();
@@ -291,6 +314,7 @@ async function toRecordSupabase(
   const referenceImages = await resolveReferenceImages(
     normalizeIds(row.reference_image_ids),
     userId,
+    refById,
   );
 
   let voiceSample: CharacterProfile["voiceSample"] = null;
@@ -308,6 +332,16 @@ async function toRecordSupabase(
     sheetUrl = await createStorageSignedUrl(admin, bucket, row.sheet_storage_path, expires);
   }
 
+  let muapiCharacterSheetUrl: string | null = null;
+  if (row.muapi_character_sheet_storage_path) {
+    muapiCharacterSheetUrl = await createStorageSignedUrl(
+      admin,
+      bucket,
+      row.muapi_character_sheet_storage_path,
+      expires,
+    );
+  }
+
   return characterProfileSchema.parse({
     id: row.id,
     name: row.name,
@@ -315,6 +349,11 @@ async function toRecordSupabase(
     referenceImages,
     voiceSample,
     sheetUrl,
+    muapiCharacterRequestId: row.muapi_character_request_id ?? null,
+    muapiCharacterSheetUrl,
+    muapiCharacterSheetUpdatedAt: row.muapi_character_sheet_updated_at
+      ? asIso(row.muapi_character_sheet_updated_at)
+      : null,
     createdAt: asIso(row.created_at),
     updatedAt: asIso(row.updated_at),
   });
@@ -362,6 +401,8 @@ async function createCharacterProfileSupabase(
     throw new Error(`character_profiles insert failed: ${error.message}`);
   }
 
+  const refById = await buildReferenceImageMap(input.referenceImageIds, userId);
+
   return toRecordSupabase(
     {
       id,
@@ -373,10 +414,15 @@ async function createCharacterProfileSupabase(
       voice_sample_name: input.voiceSample?.originalName ?? null,
       sheet_storage_path: null,
       sheet_mime_type: null,
+      muapi_character_request_id: null,
+      muapi_character_sheet_storage_path: null,
+      muapi_character_sheet_mime_type: null,
+      muapi_character_sheet_updated_at: null,
       created_at: now,
       updated_at: now,
     },
     userId,
+    refById,
   );
 }
 
@@ -394,9 +440,40 @@ async function listCharacterProfilesSupabase(
   }
   if (!data?.length) return [];
 
-  return Promise.all(
-    data.map((row) => toRecordSupabase(row as CharacterProfileRow, userId)),
-  );
+  const rows = data as CharacterProfileRow[];
+  const allRefIds = [
+    ...new Set(rows.flatMap((row) => normalizeIds(row.reference_image_ids))),
+  ];
+  const refById = await buildReferenceImageMap(allRefIds, userId);
+
+  return Promise.all(rows.map((row) => toRecordSupabase(row, userId, refById)));
+}
+
+export type CharacterProfileSheetContext = {
+  name: string;
+  artDirection: string;
+  storedReferenceImageIds: string[];
+};
+
+export async function getCharacterProfileSheetContext(
+  id: string,
+  userId: string,
+): Promise<CharacterProfileSheetContext> {
+  if (isSupabasePersistenceEnabled()) {
+    const row = await getCharacterProfileRowSupabase(id, userId);
+    return {
+      name: row.name,
+      artDirection: row.art_direction ?? "",
+      storedReferenceImageIds: normalizeIds(row.reference_image_ids),
+    };
+  }
+
+  const profile = await getCharacterProfile(id, userId);
+  return {
+    name: profile.name,
+    artDirection: profile.artDirection,
+    storedReferenceImageIds: profile.referenceImages.map((item) => item.id),
+  };
 }
 
 async function getCharacterProfileRowSupabase(
@@ -425,7 +502,11 @@ async function deleteCharacterProfileSupabase(id: string, userId: string): Promi
   const bucket = env.SUPABASE_CHARACTER_ASSETS_BUCKET;
   const row = await getCharacterProfileRowSupabase(id, userId);
 
-  for (const objectPath of [row.voice_sample_path, row.sheet_storage_path]) {
+  for (const objectPath of [
+    row.voice_sample_path,
+    row.sheet_storage_path,
+    row.muapi_character_sheet_storage_path,
+  ]) {
     if (!objectPath) continue;
     try {
       await removeStorageObject(admin, bucket, objectPath);
@@ -480,6 +561,28 @@ async function updateCharacterProfileSupabase(
   const voiceSampleMime = voiceAfter.mime;
   const voiceSampleName = voiceAfter.name;
 
+  const refsChanged = referenceIdsChanged(
+    normalizeIds(row.reference_image_ids),
+    input.referenceImageIds,
+  );
+
+  let muapiCharacterRequestId = row.muapi_character_request_id;
+  let muapiCharacterSheetStoragePath = row.muapi_character_sheet_storage_path;
+  let muapiCharacterSheetMimeType = row.muapi_character_sheet_mime_type;
+  let muapiCharacterSheetUpdatedAt = row.muapi_character_sheet_updated_at;
+
+  if (refsChanged && muapiCharacterSheetStoragePath) {
+    try {
+      await removeStorageObject(admin, bucket, muapiCharacterSheetStoragePath);
+    } catch {
+      /* tolerate missing blob */
+    }
+    muapiCharacterRequestId = null;
+    muapiCharacterSheetStoragePath = null;
+    muapiCharacterSheetMimeType = null;
+    muapiCharacterSheetUpdatedAt = null;
+  }
+
   const updatedAt = new Date().toISOString();
   const { error } = await admin
     .from("character_profiles")
@@ -490,6 +593,10 @@ async function updateCharacterProfileSupabase(
       voice_sample_path: voiceSamplePath,
       voice_sample_mime: voiceSampleMime,
       voice_sample_name: voiceSampleName,
+      muapi_character_request_id: muapiCharacterRequestId,
+      muapi_character_sheet_storage_path: muapiCharacterSheetStoragePath,
+      muapi_character_sheet_mime_type: muapiCharacterSheetMimeType,
+      muapi_character_sheet_updated_at: muapiCharacterSheetUpdatedAt,
       updated_at: updatedAt,
     })
     .eq("id", id)
@@ -497,6 +604,8 @@ async function updateCharacterProfileSupabase(
   if (error) {
     throw new Error(`character_profiles update failed: ${error.message}`);
   }
+
+  const refById = await buildReferenceImageMap(input.referenceImageIds, userId);
 
   return toRecordSupabase(
     {
@@ -507,9 +616,14 @@ async function updateCharacterProfileSupabase(
       voice_sample_path: voiceSamplePath,
       voice_sample_mime: voiceSampleMime,
       voice_sample_name: voiceSampleName,
+      muapi_character_request_id: muapiCharacterRequestId,
+      muapi_character_sheet_storage_path: muapiCharacterSheetStoragePath,
+      muapi_character_sheet_mime_type: muapiCharacterSheetMimeType,
+      muapi_character_sheet_updated_at: muapiCharacterSheetUpdatedAt,
       updated_at: updatedAt,
     },
     userId,
+    refById,
   );
 }
 
@@ -557,6 +671,64 @@ async function saveCharacterProfileSheetSupabase(
       updated_at: updatedAt,
     },
     userId,
+  );
+}
+
+async function saveMuapiCharacterSheetSupabase(
+  id: string,
+  input: SaveMuapiCharacterSheetInput,
+  userId: string,
+): Promise<CharacterProfile> {
+  const env = getEnv();
+  const admin = createAdminClient();
+  const bucket = env.SUPABASE_CHARACTER_ASSETS_BUCKET;
+  const row = await getCharacterProfileRowSupabase(id, userId);
+
+  const ext = imageExtFromMime(input.mimeType);
+  const objectPath = `${id}/muapi-character-sheet.${ext}`;
+  await uploadStorageObject(admin, bucket, objectPath, input.bytes, input.mimeType);
+
+  if (
+    row.muapi_character_sheet_storage_path &&
+    row.muapi_character_sheet_storage_path !== objectPath
+  ) {
+    try {
+      await removeStorageObject(admin, bucket, row.muapi_character_sheet_storage_path);
+    } catch {
+      /* tolerate missing blob */
+    }
+  }
+
+  const updatedAt = new Date().toISOString();
+  const { error } = await admin
+    .from("character_profiles")
+    .update({
+      muapi_character_request_id: input.requestId,
+      muapi_character_sheet_storage_path: objectPath,
+      muapi_character_sheet_mime_type: input.mimeType,
+      muapi_character_sheet_updated_at: updatedAt,
+      updated_at: updatedAt,
+    })
+    .eq("id", id)
+    .eq("user_id", userId);
+  if (error) {
+    throw new Error(`character_profiles update failed: ${error.message}`);
+  }
+
+  const refIds = normalizeIds(row.reference_image_ids);
+  const refById = await buildReferenceImageMap(refIds, userId);
+
+  return toRecordSupabase(
+    {
+      ...row,
+      muapi_character_request_id: input.requestId,
+      muapi_character_sheet_storage_path: objectPath,
+      muapi_character_sheet_mime_type: input.mimeType,
+      muapi_character_sheet_updated_at: updatedAt,
+      updated_at: updatedAt,
+    },
+    userId,
+    refById,
   );
 }
 
@@ -633,7 +805,9 @@ export async function getCharacterProfile(
       throw new Error("userId required when Supabase persistence is enabled");
     }
     const row = await getCharacterProfileRowSupabase(id, userId);
-    return toRecordSupabase(row, userId);
+    const refIds = normalizeIds(row.reference_image_ids);
+    const refById = await buildReferenceImageMap(refIds, userId);
+    return toRecordSupabase(row, userId, refById);
   }
 
   const records = await readLocalIndex();
@@ -687,6 +861,10 @@ export async function updateCharacterProfile(
   stored.voiceSampleMime = voiceAfter.mime;
   stored.voiceSampleName = voiceAfter.name;
 
+  if (referenceIdsChanged(stored.referenceImageIds, input.referenceImageIds)) {
+    await clearMuapiCharacterSheetLocal(stored);
+  }
+
   stored.name = input.name;
   stored.artDirection = input.artDirection;
   stored.referenceImageIds = input.referenceImageIds;
@@ -708,7 +886,11 @@ export async function deleteCharacterProfile(id: string, userId?: string): Promi
   if (!stored) {
     throw new CharacterProfileNotFoundError(id);
   }
-  for (const fileName of [stored.voiceSamplePath, stored.sheetStoragePath]) {
+  for (const fileName of [
+    stored.voiceSamplePath,
+    stored.sheetStoragePath,
+    stored.muapiCharacterSheetStoragePath,
+  ]) {
     if (fileName) await removeLocalAsset(fileName);
   }
   await writeIndex(records.filter((item) => item.id !== id));
@@ -740,6 +922,42 @@ export async function saveCharacterProfileSheet(
   stored.sheetStoragePath = fileName;
   stored.sheetMimeType = input.mimeType;
   stored.updatedAt = new Date().toISOString();
+  await writeIndex(records);
+  return toRecordLocal(stored, userId);
+}
+
+export async function saveMuapiCharacterSheet(
+  id: string,
+  input: SaveMuapiCharacterSheetInput,
+  userId?: string,
+): Promise<CharacterProfile> {
+  if (isSupabasePersistenceEnabled()) {
+    if (!userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
+    return saveMuapiCharacterSheetSupabase(id, input, userId);
+  }
+
+  const records = await readLocalIndex();
+  const stored = records.find((item) => item.id === id);
+  if (!stored) {
+    throw new CharacterProfileNotFoundError(id);
+  }
+
+  const ext = imageExtFromMime(input.mimeType);
+  const fileName = await writeLocalAsset(`muapi-char-sheet-${id}.${ext}`, input.bytes);
+  if (
+    stored.muapiCharacterSheetStoragePath &&
+    stored.muapiCharacterSheetStoragePath !== fileName
+  ) {
+    await removeLocalAsset(stored.muapiCharacterSheetStoragePath);
+  }
+
+  stored.muapiCharacterRequestId = input.requestId;
+  stored.muapiCharacterSheetStoragePath = fileName;
+  stored.muapiCharacterSheetMimeType = input.mimeType;
+  stored.muapiCharacterSheetUpdatedAt = new Date().toISOString();
+  stored.updatedAt = stored.muapiCharacterSheetUpdatedAt;
   await writeIndex(records);
   return toRecordLocal(stored, userId);
 }

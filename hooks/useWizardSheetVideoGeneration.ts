@@ -10,20 +10,31 @@ import type {
 } from "@/components/pipeline/types";
 import { postJson } from "@/lib/api/client";
 import type { RunApiAction } from "@/hooks/useApiAction";
+import type { RunReadinessResult } from "@/lib/pipeline/run-readiness";
 import type { VideoProvider, VideoRequest } from "@/lib/schemas";
 import {
   frameSequenceSheetResponseSchema,
   videoStartResponseSchema,
 } from "@/lib/schemas";
+import { fetchVoiceSampleDataUrl } from "@/lib/pipeline/wizard-utils";
 import { toast } from "sonner";
 
 type UseWizardSheetVideoGenerationOptions = {
   runApiAction: RunApiAction;
+  setError: Dispatch<SetStateAction<string | null>>;
+  setFrameSheetGenerationBusy: Dispatch<SetStateAction<boolean>>;
   maybeSaveGeneratedScript: () => Promise<void>;
   scriptEdit: { title: string; body: string };
   artDirection: string;
-  selectedReferenceUrls: string[];
-  saveSheetToSelectedProfile: (imageDataUrl: string) => Promise<void>;
+  runProfileIds: string[];
+  saveSheetToSelectedProfiles: (imageDataUrl: string) => Promise<void>;
+  buildCharacterAnchors: () => Array<{
+    name: string;
+    characterSheetUrl: string;
+    referenceImageUrls?: string[];
+  }>;
+  frameSheetReadiness: RunReadinessResult;
+  muapiVideoReadiness: RunReadinessResult;
   trackSheetScriptSelection: () => void;
   setSheetUrl: Dispatch<SetStateAction<string | null>>;
   setSheetSource: Dispatch<SetStateAction<"generated" | "uploaded">>;
@@ -32,9 +43,7 @@ type UseWizardSheetVideoGenerationOptions = {
   sheetUrl: string | null;
   videoProvider: VideoProvider;
   muapiAudioDataUrls: string[];
-  useProfileVoice: boolean;
-  selectedCharacterProfile: CharacterProfile | null;
-  fetchProfileVoiceDataUrl: () => Promise<string | null>;
+  characterProfiles: CharacterProfile[];
 
   setVideoGenerationBusy: Dispatch<SetStateAction<boolean>>;
   setSubtitleSrt: Dispatch<SetStateAction<string>>;
@@ -50,11 +59,16 @@ export function useWizardSheetVideoGeneration(
 ) {
   const {
     runApiAction,
+    setError,
+    setFrameSheetGenerationBusy,
     maybeSaveGeneratedScript,
     scriptEdit,
     artDirection,
-    selectedReferenceUrls,
-    saveSheetToSelectedProfile,
+    runProfileIds,
+    saveSheetToSelectedProfiles,
+    buildCharacterAnchors,
+    frameSheetReadiness,
+    muapiVideoReadiness,
     trackSheetScriptSelection,
     setSheetUrl,
     setSheetSource,
@@ -62,9 +76,7 @@ export function useWizardSheetVideoGeneration(
     sheetUrl,
     videoProvider,
     muapiAudioDataUrls,
-    useProfileVoice,
-    selectedCharacterProfile,
-    fetchProfileVoiceDataUrl,
+    characterProfiles,
     setVideoGenerationBusy,
     setSubtitleSrt,
     setSubtitleChars,
@@ -75,18 +87,23 @@ export function useWizardSheetVideoGeneration(
   } = options;
 
   const generateSheet = useCallback(async () => {
+    if (!frameSheetReadiness.ok) {
+      toast.error(frameSheetReadiness.reason);
+      return;
+    }
+
     toast.info("Generating frame sequence sheet...");
-    await runApiAction(async () => {
+    setFrameSheetGenerationBusy(true);
+    try {
       await maybeSaveGeneratedScript();
+      const characterAnchors = buildCharacterAnchors();
       const data = await postJson(
         "/api/frame-sequence-sheet",
         {
           scriptTitle: scriptEdit.title,
           scriptBody: scriptEdit.body,
           artDirection: artDirection || undefined,
-          referenceImageUrls: selectedReferenceUrls.length
-            ? selectedReferenceUrls
-            : undefined,
+          characterAnchors: characterAnchors.length ? characterAnchors : undefined,
         },
         "Frame sequence sheet failed",
         frameSequenceSheetResponseSchema,
@@ -96,15 +113,24 @@ export function useWizardSheetVideoGeneration(
       trackSheetScriptSelection();
       setStep("sheet");
       toast.success("Frame sequence sheet generated.");
-      await saveSheetToSelectedProfile(data.imageDataUrl);
-    }, "Request failed");
+      await saveSheetToSelectedProfiles(data.imageDataUrl);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Request failed";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setFrameSheetGenerationBusy(false);
+    }
   }, [
     artDirection,
+    buildCharacterAnchors,
+    frameSheetReadiness,
     maybeSaveGeneratedScript,
-    runApiAction,
-    saveSheetToSelectedProfile,
+    saveSheetToSelectedProfiles,
+    setError,
+    setFrameSheetGenerationBusy,
     scriptEdit,
-    selectedReferenceUrls,
     setSheetSource,
     setSheetUrl,
     setStep,
@@ -113,6 +139,12 @@ export function useWizardSheetVideoGeneration(
 
   const startVideo = useCallback(async () => {
     if (!sheetUrl) return;
+
+    if (videoProvider === "muapi" && !muapiVideoReadiness.ok) {
+      toast.error(muapiVideoReadiness.reason);
+      return;
+    }
+
     toast.info("Preparing references and starting video job...");
     await runApiAction(async () => {
       setVideoGenerationBusy(true);
@@ -123,26 +155,29 @@ export function useWizardSheetVideoGeneration(
         setSubtitleVideoDurationSec(null);
         setVideoStatus("Starting video job…");
         setStep("video");
+
         let audioDataUrls: string[] | undefined;
         if (videoProvider === "muapi" && muapiAudioDataUrls.length > 0) {
           audioDataUrls = muapiAudioDataUrls;
-        } else if (
-          videoProvider === "muapi" &&
-          useProfileVoice &&
-          selectedCharacterProfile?.voiceSample
-        ) {
-          const profileVoice = await fetchProfileVoiceDataUrl();
-          if (profileVoice) {
-            audioDataUrls = [profileVoice];
+        } else if (videoProvider === "muapi") {
+          const clips: string[] = [];
+          for (const profileId of runProfileIds) {
+            const profile = characterProfiles.find((p) => p.id === profileId);
+            if (!profile?.voiceSample) continue;
+            clips.push(await fetchVoiceSampleDataUrl(profile.voiceSample));
           }
+          if (clips.length) audioDataUrls = clips;
         }
+
         const payload: VideoRequest = {
           scriptTitle: scriptEdit.title,
           scriptBody: scriptEdit.body,
           imageDataUrlOrUrl: sheetUrl,
+          runProfileIds,
           provider: videoProvider,
           ...(audioDataUrls ? { audioDataUrls } : {}),
         };
+
         const data = await postJson(
           "/api/video",
           payload,
@@ -165,11 +200,12 @@ export function useWizardSheetVideoGeneration(
       }
     }, "Request failed");
   }, [
-    fetchProfileVoiceDataUrl,
+    characterProfiles,
     muapiAudioDataUrls,
+    muapiVideoReadiness,
     runApiAction,
+    runProfileIds,
     scriptEdit,
-    selectedCharacterProfile,
     sheetUrl,
     setPendingVideoJob,
     setStep,
@@ -179,7 +215,6 @@ export function useWizardSheetVideoGeneration(
     setVideoGenerationBusy,
     setVideoMeta,
     setVideoStatus,
-    useProfileVoice,
     videoProvider,
   ]);
 
