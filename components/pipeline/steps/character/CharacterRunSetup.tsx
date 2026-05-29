@@ -1,11 +1,13 @@
 "use client";
 
-import type { CharacterProfile } from "@/components/pipeline/types";
+import type { CharacterProfile, ReferenceImage } from "@/components/pipeline/types";
+import { ReferenceLibraryPicker } from "@/components/pipeline/steps/character/ReferenceLibraryPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Mic } from "lucide-react";
+import type { ChangeEvent } from "react";
 
 export type CharacterRunSetupProps = {
   busy: boolean;
@@ -16,6 +18,14 @@ export type CharacterRunSetupProps = {
   generateBlockedReason: string | null;
   onGenerateSheet: () => void;
   onReuseProfileSheet: () => void;
+  referenceImages: ReferenceImage[];
+  loadingReferenceImages: boolean;
+  referenceLibraryBusy: boolean;
+  onUploadReference: (e: ChangeEvent<HTMLInputElement>) => Promise<unknown>;
+  maxFrameSheetExtras: number;
+  frameSheetExtraReferenceUrls: string[];
+  isFrameSheetExtraReferenceSelected: (item: ReferenceImage) => boolean;
+  onToggleFrameSheetExtraReference: (item: ReferenceImage) => void;
 };
 
 export function CharacterRunSetup({
@@ -27,8 +37,18 @@ export function CharacterRunSetup({
   generateBlockedReason,
   onGenerateSheet,
   onReuseProfileSheet,
+  referenceImages,
+  loadingReferenceImages,
+  referenceLibraryBusy,
+  onUploadReference,
+  maxFrameSheetExtras,
+  frameSheetExtraReferenceUrls,
+  isFrameSheetExtraReferenceSelected,
+  onToggleFrameSheetExtraReference,
 }: CharacterRunSetupProps) {
   const hasSavedFrameSheet = selectedProfiles.some((p) => p.sheetUrl);
+  const pickerDisabled =
+    busy || generatingFrameSheet || maxFrameSheetExtras === 0;
 
   return (
     <>
@@ -47,7 +67,8 @@ export function CharacterRunSetup({
             placeholder="e.g. flat vector mascot, soft 3D, cyberpunk palette"
           />
           <p className="text-xs text-zinc-500">
-            Applies to the script-driven frame sequence sheet on the next step.
+            Applies to the script-driven frame sequence sheet. Edit here, then
+            generate again after changing settings.
           </p>
         </div>
 
@@ -94,6 +115,33 @@ export function CharacterRunSetup({
             Select one or more character profiles above to continue.
           </p>
         )}
+
+        {selectedProfiles.length > 0 && maxFrameSheetExtras > 0 ? (
+          <div className="space-y-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+            <Label>Extra references for frame sheet (optional)</Label>
+            <p className="text-xs text-zinc-500">
+              Character sheets are included automatically. Pick up to{" "}
+              {maxFrameSheetExtras} more library image
+              {maxFrameSheetExtras === 1 ? "" : "s"} to steer style or scene
+              details.
+            </p>
+            <ReferenceLibraryPicker
+              busy={referenceLibraryBusy}
+              disabled={pickerDisabled}
+              referenceImages={referenceImages}
+              loadingReferenceImages={loadingReferenceImages}
+              onUploadReference={onUploadReference}
+              isSelected={isFrameSheetExtraReferenceSelected}
+              onToggle={onToggleFrameSheetExtraReference}
+              selectedCount={frameSheetExtraReferenceUrls.length}
+            />
+          </div>
+        ) : selectedProfiles.length > 0 && maxFrameSheetExtras === 0 ? (
+          <p className="text-xs text-zinc-500 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+            All 9 reference slots are used by character sheets; remove a character
+            or use fewer profiles to add extra library images.
+          </p>
+        ) : null}
 
         {selectedProfiles.length > 0 && generateBlockedReason ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">

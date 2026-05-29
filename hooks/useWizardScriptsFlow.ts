@@ -14,7 +14,10 @@ import type {
 } from "@/components/pipeline/types";
 import type { RunApiAction } from "@/hooks/useApiAction";
 import { postJson } from "@/lib/api/client";
-import { MAX_MANUAL_SCRIPT_FILE_BYTES } from "@/lib/pipeline/wizard-utils";
+import {
+  MAX_MANUAL_SCRIPT_FILE_BYTES,
+  upsertSheetScriptHistoryEntry,
+} from "@/lib/pipeline/wizard-utils";
 import { savedScriptSchema, scriptsResponseSchema } from "@/lib/schemas";
 
 type UseWizardScriptsFlowOptions = {
@@ -84,35 +87,14 @@ export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
     loadSavedScripts,
   } = options;
 
-  const trackSheetScriptSelection = useCallback(() => {
-    const title = scriptEdit.title.trim() || "Untitled Script";
-    const body = scriptEdit.body.trim();
-    if (!body) return;
-
-    const selectedKey = `${title}::${body}`;
-    const remaining =
-      scripts?.length
-        ? scripts
-            .filter(
-              (item) =>
-                `${item.title.trim()}::${item.body.trim()}` !== selectedKey,
-            )
-            .map((item) => ({ title: item.title, body: item.body }))
-        : [];
-    const entry: SheetScriptHistoryEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      selectedScript: { title, body },
-      remainingScripts: remaining,
-      createdAt: new Date().toISOString(),
-    };
-    setSheetScriptHistory((prev) => {
-      const deduped = prev.filter(
-        (item) =>
-          item.selectedScript.title.trim() !== title ||
-          item.selectedScript.body.trim() !== body,
-      );
-      return [entry, ...deduped].slice(0, 20);
-    });
+  const recordSheetScriptHistory = useCallback(() => {
+    setSheetScriptHistory((prev) =>
+      upsertSheetScriptHistoryEntry(prev, {
+        title: scriptEdit.title,
+        body: scriptEdit.body,
+        scripts,
+      }),
+    );
     setExpandedHistoryId(null);
   }, [scriptEdit, scripts, setExpandedHistoryId, setSheetScriptHistory]);
 
@@ -163,8 +145,9 @@ export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
     const title = scriptEdit.title.trim();
     const body = scriptEdit.body.trim();
     if (!title || !body) return;
+    const key = `${title}::${body}`;
     const exists = savedScripts.some(
-      (item) => item.title.trim() === title && item.body.trim() === body,
+      (item) => `${item.title.trim()}::${item.body.trim()}` === key,
     );
     if (exists) return;
     const saved = await saveScriptToLibrary({ title, body, source: "generated" });
@@ -402,7 +385,7 @@ export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
   }, [maybeSaveGeneratedScript, runApiAction, scriptEdit, setError, setStep]);
 
   return {
-    trackSheetScriptSelection,
+    recordSheetScriptHistory,
     onPickScript,
     onScriptEditChange,
     maybeSaveGeneratedScript,

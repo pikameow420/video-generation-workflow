@@ -34,7 +34,7 @@ import {
   getCharacterProfile,
   listCharacterProfiles,
   saveCharacterProfileSheet,
-  saveMuapiCharacterSheet,
+  saveProfileSheetImage,
   updateCharacterProfile,
 } from "@/lib/character-profiles/store";
 
@@ -89,7 +89,7 @@ describe("character profile store — local JSON fallback", () => {
     });
     expect(created.sheetUrl).toBeNull();
 
-    const updated = await saveCharacterProfileSheet(created.id, {
+    const updated = await saveProfileSheetImage(created.id, {
       bytes: new Uint8Array([9, 9, 9]),
       mimeType: "image/png",
     });
@@ -153,26 +153,26 @@ describe("character profile store — local JSON fallback", () => {
     ).rejects.toBeInstanceOf(CharacterProfileNotFoundError);
   });
 
-  it("saves a MuAPI character sheet and clears it when reference ids change", async () => {
+  it("saves a character sheet and clears it when reference ids change", async () => {
     const created = await createCharacterProfile({
-      name: "MuAPI Char",
+      name: "Sheet Char",
       artDirection: "",
       referenceImageIds: ["ref-a"],
       voiceSample: null,
     });
 
-    const withSheet = await saveMuapiCharacterSheet(created.id, {
-      requestId: "muapi-req-99",
+    const withSheet = await saveCharacterProfileSheet(created.id, {
+      requestId: null,
       bytes: new Uint8Array([4, 5, 6]),
       mimeType: "image/png",
     });
-    expect(withSheet.muapiCharacterRequestId).toBe("muapi-req-99");
+    expect(withSheet.muapiCharacterRequestId).toBeNull();
     expect(withSheet.muapiCharacterSheetUrl).toMatch(
       /^\/uploads\/character-assets\/muapi-char-sheet-/,
     );
 
     const cleared = await updateCharacterProfile(created.id, {
-      name: "MuAPI Char",
+      name: "Sheet Char",
       artDirection: "",
       referenceImageIds: ["ref-b"],
     });

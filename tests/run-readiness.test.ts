@@ -27,6 +27,19 @@ function mockProfile(
 }
 
 describe("run readiness", () => {
+  it("allows frame sheet when profile has sheet URL but no MuAPI request id", () => {
+    const run = [{ profileId: "a", extraReferenceUrls: [] as string[] }];
+    const profiles = [
+      mockProfile({
+        id: "a",
+        name: "Alice",
+        muapiCharacterRequestId: null,
+        muapiCharacterSheetUrl: "https://example.com/sheet.png",
+      }),
+    ];
+    expect(assertRunReadyForFrameSheet(run, profiles)).toEqual({ ok: true });
+  });
+
   it("requires character sheets for frame sheet generation", () => {
     const run = [{ profileId: "a", extraReferenceUrls: [] as string[] }];
     const profiles = [

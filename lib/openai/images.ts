@@ -8,12 +8,27 @@ type GenerateFrameSequenceSheetInput = {
   referenceImageUrls?: string[];
 };
 
+export type GenerateCharacterProfileSheetInput = {
+  prompt: string;
+  requestUrl: string;
+  referenceImageUrls: string[];
+};
+
 type OpenAiImageResponse = {
   data?: Array<{
     b64_json?: string;
     url?: string;
   }>;
   output_format?: "png" | "jpeg" | "webp";
+};
+
+type OpenAIImagePreset = "frameSequence" | "characterProfile";
+
+type GenerateOpenAIImageInput = {
+  prompt: string;
+  requestUrl: string;
+  referenceImageUrls?: string[];
+  preset: OpenAIImagePreset;
 };
 
 function pickConfigValue(value: string | undefined, fallback: string): string {
@@ -100,10 +115,10 @@ async function readOpenAiImageResponse(res: Response): Promise<OpenAiImageRespon
   return parsed;
 }
 
-async function resolveImageDataUrlFromResponse(
+async function resolveImageBytesFromResponse(
   response: OpenAiImageResponse,
   fallbackOutputFormat: "png" | "jpeg" | "webp",
-): Promise<{ mimeType: string; dataUrl: string }> {
+): Promise<{ mimeType: string; bytes: Uint8Array }> {
   const first = response.data?.[0];
   if (!first) {
     throw new Error("OpenAI image request returned no image data");
@@ -114,7 +129,7 @@ async function resolveImageDataUrlFromResponse(
     const mimeType = mimeFromOutputFormat(format);
     return {
       mimeType,
-      dataUrl: `data:${mimeType};base64,${first.b64_json}`,
+      bytes: Uint8Array.from(Buffer.from(first.b64_json, "base64")),
     };
   }
 
@@ -123,20 +138,33 @@ async function resolveImageDataUrlFromResponse(
     if (!imageRes.ok) {
       throw new Error("Failed to download generated OpenAI image URL");
     }
-    const buf = Buffer.from(await imageRes.arrayBuffer());
     const mimeType = imageRes.headers.get("content-type") ?? "image/png";
     return {
       mimeType,
-      dataUrl: `data:${mimeType};base64,${buf.toString("base64")}`,
+      bytes: new Uint8Array(await imageRes.arrayBuffer()),
     };
   }
 
   throw new Error("OpenAI image response missing both b64_json and url");
 }
 
-export async function generateFrameSequenceSheetWithOpenAI(
-  input: GenerateFrameSequenceSheetInput,
-): Promise<{ mimeType: string; dataUrl: string }> {
+function openAIImageConfig(preset: OpenAIImagePreset) {
+  const env = getEnv();
+  if (preset === "characterProfile") {
+    return {
+      model: pickConfigValue(env.OPENAI_CHARACTER_SHEET_MODEL, "gpt-image-2"),
+      size: pickConfigValue(env.OPENAI_CHARACTER_SHEET_SIZE, "1080x1920"),
+    };
+  }
+  return {
+    model: pickConfigValue(env.OPENAI_IMAGE_MODEL, "gpt-image-1.5"),
+    size: pickConfigValue(env.OPENAI_IMAGE_SIZE, "1080x1920"),
+  };
+}
+
+async function generateOpenAIImage(
+  input: GenerateOpenAIImageInput,
+): Promise<{ mimeType: string; bytes: Uint8Array }> {
   const env = getEnv();
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey?.trim()) {
@@ -144,15 +172,17 @@ export async function generateFrameSequenceSheetWithOpenAI(
   }
 
   const referenceUrls = (input.referenceImageUrls ?? []).map((url) => url.trim()).filter(Boolean);
-  const model = pickConfigValue(env.OPENAI_IMAGE_MODEL, "gpt-image-1.5");
-  const size = pickConfigValue(env.OPENAI_IMAGE_SIZE, "1024x1536");
+  if (input.preset === "characterProfile" && !referenceUrls.length) {
+    throw new Error("At least one anchor reference image URL is required");
+  }
+
+  const { model, size } = openAIImageConfig(input.preset);
   const quality = pickConfigValue(env.OPENAI_IMAGE_QUALITY, "auto");
   const outputFormat = (
     ["png", "jpeg", "webp"].includes(env.OPENAI_IMAGE_OUTPUT_FORMAT)
       ? env.OPENAI_IMAGE_OUTPUT_FORMAT
       : "png"
   ) as "png" | "jpeg" | "webp";
-  const fallbackOutputFormat = outputFormat;
 
   if (!referenceUrls.length) {
     const res = await fetch("https://api.openai.com/v1/images/generations", {
@@ -171,7 +201,7 @@ export async function generateFrameSequenceSheetWithOpenAI(
       }),
     });
     const response = await readOpenAiImageResponse(res);
-    return resolveImageDataUrlFromResponse(response, fallbackOutputFormat);
+    return resolveImageBytesFromResponse(response, outputFormat);
   }
 
   const files = await Promise.all(
@@ -193,5 +223,29 @@ export async function generateFrameSequenceSheetWithOpenAI(
     body: form,
   });
   const response = await readOpenAiImageResponse(res);
-  return resolveImageDataUrlFromResponse(response, fallbackOutputFormat);
+  return resolveImageBytesFromResponse(response, outputFormat);
+}
+
+export async function generateFrameSequenceSheetWithOpenAI(
+  input: GenerateFrameSequenceSheetInput,
+): Promise<{ mimeType: string; dataUrl: string }> {
+  const { mimeType, bytes } = await generateOpenAIImage({
+    prompt: input.prompt,
+    requestUrl: input.requestUrl,
+    referenceImageUrls: input.referenceImageUrls,
+    preset: "frameSequence",
+  });
+  const b64 = Buffer.from(bytes).toString("base64");
+  return { mimeType, dataUrl: `data:${mimeType};base64,${b64}` };
+}
+
+export async function generateCharacterProfileSheetWithOpenAI(
+  input: GenerateCharacterProfileSheetInput,
+): Promise<{ mimeType: string; bytes: Uint8Array }> {
+  return generateOpenAIImage({
+    prompt: input.prompt,
+    requestUrl: input.requestUrl,
+    referenceImageUrls: input.referenceImageUrls,
+    preset: "characterProfile",
+  });
 }

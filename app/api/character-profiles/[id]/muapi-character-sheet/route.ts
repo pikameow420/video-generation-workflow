@@ -3,15 +3,15 @@ import { parseErrorMessage } from "@/lib/api/errors";
 import { requireUser } from "@/lib/auth/require-user";
 import { AnchorReferenceNotFoundError } from "@/lib/character-profiles/errors";
 import {
-  generateMuapiCharacterSheetForProfile,
-  MuapiCharacterSheetInputError,
-} from "@/lib/character-profiles/generate-muapi-character-sheet";
+  CharacterProfileSheetInputError,
+  generateCharacterProfileSheetForProfile,
+} from "@/lib/character-profiles/generate-character-profile-sheet";
 import { CharacterProfileNotFoundError } from "@/lib/character-profiles/store";
 import { getEnv } from "@/lib/env";
 import { muapiCharacterSheetRequestSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 export async function POST(
   req: Request,
@@ -22,7 +22,7 @@ export async function POST(
     if (auth.error) return auth.error;
 
     const env = getEnv();
-    if (!env.MUAPI_API_KEY?.trim()) {
+    if (!env.OPENAI_API_KEY?.trim()) {
       return NextResponse.json(
         { error: "Character sheet generation is not configured on the server." },
         { status: 503 },
@@ -39,7 +39,7 @@ export async function POST(
       );
     }
 
-    const updated = await generateMuapiCharacterSheetForProfile(
+    const updated = await generateCharacterProfileSheetForProfile(
       id,
       auth.user.id,
       {
@@ -54,14 +54,14 @@ export async function POST(
       return NextResponse.json({ error: err.message }, { status: 404 });
     }
     if (
-      err instanceof MuapiCharacterSheetInputError ||
+      err instanceof CharacterProfileSheetInputError ||
       err instanceof AnchorReferenceNotFoundError
     ) {
       return NextResponse.json({ error: err.message }, { status: 400 });
     }
     const message = parseErrorMessage(err, "Failed to generate character sheet");
     const status =
-      message.includes("MUAPI_API_KEY") || message.includes("not configured")
+      message.includes("OPENAI_API_KEY") || message.includes("not configured")
         ? 503
         : 500;
     return NextResponse.json({ error: message }, { status });

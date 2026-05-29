@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+import { Button } from "@/components/ui/button";
+
 export default function Error({
   error,
   reset,
@@ -20,13 +22,14 @@ export default function Error({
         <p className="mt-2 text-sm text-red-800/90 dark:text-red-200/90">
           {error.message || "The page failed to render."}
         </p>
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={reset}
-          className="mt-4 rounded-full border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
+          className="mt-4 rounded-full border-red-300 text-red-800 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/50"
         >
           Try again
-        </button>
+        </Button>
       </div>
     </main>
   );

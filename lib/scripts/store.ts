@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { getEnv } from "@/lib/env";
 import { isSupabasePersistenceEnabled } from "@/lib/persistence/backend";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { dedupeByTitleBody, savedScriptDedupeKey } from "@/lib/scripts/dedupe";
 import { savedScriptSchema } from "@/lib/schemas";
 
 export type SavedScriptSource = "generated" | "manual" | "uploaded";
@@ -68,12 +69,36 @@ async function putSavedScriptSupabase(
   userId: string,
 ): Promise<SavedScriptRecord> {
   const admin = createAdminClient();
+  const title = input.title.trim();
+  const body = input.body.trim();
+  const { data: existing, error: lookupError } = await admin
+    .from("saved_scripts")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("title", title)
+    .eq("body", body)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (lookupError) {
+    throw new Error(`saved_scripts lookup failed: ${lookupError.message}`);
+  }
+  if (existing) {
+    return savedScriptSchema.parse({
+      id: existing.id as string,
+      title: existing.title as string,
+      body: existing.body as string,
+      source: existing.source as SavedScriptSource,
+      createdAt: asIso(existing.created_at),
+    });
+  }
+
   const id = randomUUID();
   const createdAt = new Date().toISOString();
   const { error } = await admin.from("saved_scripts").insert({
     id,
-    title: input.title.trim(),
-    body: input.body.trim(),
+    title,
+    body,
     source: input.source,
     created_at: createdAt,
     user_id: userId,
@@ -84,8 +109,8 @@ async function putSavedScriptSupabase(
 
   const record = savedScriptSchema.parse({
     id,
-    title: input.title.trim(),
-    body: input.body.trim(),
+    title,
+    body,
     source: input.source,
     createdAt,
   });
@@ -104,7 +129,7 @@ async function listSavedScriptsSupabase(userId: string): Promise<SavedScriptReco
   }
   if (!data?.length) return [];
 
-  return data.map((row): SavedScriptRecord =>
+  const items = data.map((row): SavedScriptRecord =>
     savedScriptSchema.parse({
       id: row.id as string,
       title: row.title as string,
@@ -113,6 +138,7 @@ async function listSavedScriptsSupabase(userId: string): Promise<SavedScriptReco
       createdAt: asIso(row.created_at),
     }),
   );
+  return dedupeByTitleBody(items);
 }
 
 export async function putSavedScript(
@@ -126,10 +152,21 @@ export async function putSavedScript(
     return putSavedScriptSupabase(input, userId);
   }
 
+  const env = getEnv();
+  const indexPath = path.resolve(process.cwd(), env.SAVED_SCRIPT_INDEX_PATH);
+  const current = await readIndex(indexPath);
+  const title = input.title.trim();
+  const body = input.body.trim();
+  const key = savedScriptDedupeKey(title, body);
+  const existing = current.find(
+    (item) => savedScriptDedupeKey(item.title, item.body) === key,
+  );
+  if (existing) return existing;
+
   const record = savedScriptSchema.parse({
     id: randomUUID(),
-    title: input.title.trim(),
-    body: input.body.trim(),
+    title,
+    body,
     source: input.source,
     createdAt: new Date().toISOString(),
   });
@@ -148,5 +185,7 @@ export async function listSavedScripts(userId?: string): Promise<SavedScriptReco
   const env = getEnv();
   const indexPath = path.resolve(process.cwd(), env.SAVED_SCRIPT_INDEX_PATH);
   const records = await readIndex(indexPath);
-  return records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return dedupeByTitleBody(
+    records.sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+  );
 }

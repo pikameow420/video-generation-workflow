@@ -46,7 +46,7 @@ export type UpdateCharacterProfileInput = {
   removeVoiceSample?: boolean;
 };
 
-export type SaveCharacterProfileSheetInput = {
+export type SaveProfileSheetImageInput = {
   bytes: Uint8Array;
   mimeType: string;
 };
@@ -80,11 +80,14 @@ type StoredCharacterProfile = {
   updatedAt: string;
 };
 
-export type SaveMuapiCharacterSheetInput = {
-  requestId: string;
+export type SaveCharacterProfileSheetInput = {
+  requestId: string | null;
   bytes: Uint8Array;
   mimeType: string;
 };
+
+/** @deprecated Use SaveCharacterProfileSheetInput */
+export type SaveMuapiCharacterSheetInput = SaveCharacterProfileSheetInput;
 
 function referenceIdsChanged(
   before: string[],
@@ -627,56 +630,31 @@ async function updateCharacterProfileSupabase(
   );
 }
 
-async function saveCharacterProfileSheetSupabase(
-  id: string,
-  input: SaveCharacterProfileSheetInput,
-  userId: string,
-): Promise<CharacterProfile> {
-  const env = getEnv();
-  const admin = createAdminClient();
-  const bucket = env.SUPABASE_CHARACTER_ASSETS_BUCKET;
-  const row = await getCharacterProfileRowSupabase(id, userId);
+type ProfileSheetAssetKind =
+  | { kind: "frameSequence" }
+  | { kind: "characterReference"; requestId: string | null };
 
-  const ext = imageExtFromMime(input.mimeType);
-  const objectPath = `${id}/sheet.${ext}`;
-  await uploadStorageObject(admin, bucket, objectPath, input.bytes, input.mimeType);
+type SheetAssetBytesInput = {
+  bytes: Uint8Array;
+  mimeType: string;
+};
 
-  if (row.sheet_storage_path && row.sheet_storage_path !== objectPath) {
-    try {
-      await removeStorageObject(admin, bucket, row.sheet_storage_path);
-    } catch {
-      /* tolerate missing blob */
-    }
-  }
-
-  const updatedAt = new Date().toISOString();
-  const { error } = await admin
-    .from("character_profiles")
-    .update({
-      sheet_storage_path: objectPath,
-      sheet_mime_type: input.mimeType,
-      updated_at: updatedAt,
-    })
-    .eq("id", id)
-    .eq("user_id", userId);
-  if (error) {
-    throw new Error(`character_profiles update failed: ${error.message}`);
-  }
-
-  return toRecordSupabase(
-    {
-      ...row,
-      sheet_storage_path: objectPath,
-      sheet_mime_type: input.mimeType,
-      updated_at: updatedAt,
-    },
-    userId,
-  );
+function sheetStorageObjectPath(profileId: string, assetKind: ProfileSheetAssetKind, ext: string) {
+  return assetKind.kind === "frameSequence"
+    ? `${profileId}/sheet.${ext}`
+    : `${profileId}/muapi-character-sheet.${ext}`;
 }
 
-async function saveMuapiCharacterSheetSupabase(
+function sheetLocalAssetFileName(profileId: string, assetKind: ProfileSheetAssetKind, ext: string) {
+  return assetKind.kind === "frameSequence"
+    ? `sheet-${profileId}.${ext}`
+    : `muapi-char-sheet-${profileId}.${ext}`;
+}
+
+async function persistProfileSheetAssetSupabase(
   id: string,
-  input: SaveMuapiCharacterSheetInput,
+  input: SheetAssetBytesInput,
+  assetKind: ProfileSheetAssetKind,
   userId: string,
 ): Promise<CharacterProfile> {
   const env = getEnv();
@@ -685,30 +663,40 @@ async function saveMuapiCharacterSheetSupabase(
   const row = await getCharacterProfileRowSupabase(id, userId);
 
   const ext = imageExtFromMime(input.mimeType);
-  const objectPath = `${id}/muapi-character-sheet.${ext}`;
+  const objectPath = sheetStorageObjectPath(id, assetKind, ext);
   await uploadStorageObject(admin, bucket, objectPath, input.bytes, input.mimeType);
 
-  if (
-    row.muapi_character_sheet_storage_path &&
-    row.muapi_character_sheet_storage_path !== objectPath
-  ) {
+  const previousPath =
+    assetKind.kind === "frameSequence"
+      ? row.sheet_storage_path
+      : row.muapi_character_sheet_storage_path;
+  if (previousPath && previousPath !== objectPath) {
     try {
-      await removeStorageObject(admin, bucket, row.muapi_character_sheet_storage_path);
+      await removeStorageObject(admin, bucket, previousPath);
     } catch {
       /* tolerate missing blob */
     }
   }
 
   const updatedAt = new Date().toISOString();
+  const updatePayload =
+    assetKind.kind === "frameSequence"
+      ? {
+          sheet_storage_path: objectPath,
+          sheet_mime_type: input.mimeType,
+          updated_at: updatedAt,
+        }
+      : {
+          muapi_character_request_id: assetKind.requestId,
+          muapi_character_sheet_storage_path: objectPath,
+          muapi_character_sheet_mime_type: input.mimeType,
+          muapi_character_sheet_updated_at: updatedAt,
+          updated_at: updatedAt,
+        };
+
   const { error } = await admin
     .from("character_profiles")
-    .update({
-      muapi_character_request_id: input.requestId,
-      muapi_character_sheet_storage_path: objectPath,
-      muapi_character_sheet_mime_type: input.mimeType,
-      muapi_character_sheet_updated_at: updatedAt,
-      updated_at: updatedAt,
-    })
+    .update(updatePayload)
     .eq("id", id)
     .eq("user_id", userId);
   if (error) {
@@ -718,18 +706,64 @@ async function saveMuapiCharacterSheetSupabase(
   const refIds = normalizeIds(row.reference_image_ids);
   const refById = await buildReferenceImageMap(refIds, userId);
 
-  return toRecordSupabase(
-    {
-      ...row,
-      muapi_character_request_id: input.requestId,
-      muapi_character_sheet_storage_path: objectPath,
-      muapi_character_sheet_mime_type: input.mimeType,
-      muapi_character_sheet_updated_at: updatedAt,
-      updated_at: updatedAt,
-    },
-    userId,
-    refById,
-  );
+  const updatedRow =
+    assetKind.kind === "frameSequence"
+      ? {
+          ...row,
+          sheet_storage_path: objectPath,
+          sheet_mime_type: input.mimeType,
+          updated_at: updatedAt,
+        }
+      : {
+          ...row,
+          muapi_character_request_id: assetKind.requestId,
+          muapi_character_sheet_storage_path: objectPath,
+          muapi_character_sheet_mime_type: input.mimeType,
+          muapi_character_sheet_updated_at: updatedAt,
+          updated_at: updatedAt,
+        };
+
+  return toRecordSupabase(updatedRow, userId, refById);
+}
+
+async function persistProfileSheetAssetLocal(
+  id: string,
+  input: SheetAssetBytesInput,
+  assetKind: ProfileSheetAssetKind,
+  userId?: string,
+): Promise<CharacterProfile> {
+  const records = await readLocalIndex();
+  const stored = records.find((item) => item.id === id);
+  if (!stored) {
+    throw new CharacterProfileNotFoundError(id);
+  }
+
+  const ext = imageExtFromMime(input.mimeType);
+  const fileName = await writeLocalAsset(sheetLocalAssetFileName(id, assetKind, ext), input.bytes);
+
+  if (assetKind.kind === "frameSequence") {
+    if (stored.sheetStoragePath && stored.sheetStoragePath !== fileName) {
+      await removeLocalAsset(stored.sheetStoragePath);
+    }
+    stored.sheetStoragePath = fileName;
+    stored.sheetMimeType = input.mimeType;
+    stored.updatedAt = new Date().toISOString();
+  } else {
+    if (
+      stored.muapiCharacterSheetStoragePath &&
+      stored.muapiCharacterSheetStoragePath !== fileName
+    ) {
+      await removeLocalAsset(stored.muapiCharacterSheetStoragePath);
+    }
+    stored.muapiCharacterRequestId = assetKind.requestId;
+    stored.muapiCharacterSheetStoragePath = fileName;
+    stored.muapiCharacterSheetMimeType = input.mimeType;
+    stored.muapiCharacterSheetUpdatedAt = new Date().toISOString();
+    stored.updatedAt = stored.muapiCharacterSheetUpdatedAt;
+  }
+
+  await writeIndex(records);
+  return toRecordLocal(stored, userId);
 }
 
 // --- Public API ----------------------------------------------------------------
@@ -896,68 +930,38 @@ export async function deleteCharacterProfile(id: string, userId?: string): Promi
   await writeIndex(records.filter((item) => item.id !== id));
 }
 
+export async function saveProfileSheetImage(
+  id: string,
+  input: SaveProfileSheetImageInput,
+  userId?: string,
+): Promise<CharacterProfile> {
+  const assetKind: ProfileSheetAssetKind = { kind: "frameSequence" };
+  if (isSupabasePersistenceEnabled()) {
+    if (!userId) {
+      throw new Error("userId required when Supabase persistence is enabled");
+    }
+    return persistProfileSheetAssetSupabase(id, input, assetKind, userId);
+  }
+  return persistProfileSheetAssetLocal(id, input, assetKind, userId);
+}
+
 export async function saveCharacterProfileSheet(
   id: string,
   input: SaveCharacterProfileSheetInput,
   userId?: string,
 ): Promise<CharacterProfile> {
+  const assetKind: ProfileSheetAssetKind = {
+    kind: "characterReference",
+    requestId: input.requestId,
+  };
   if (isSupabasePersistenceEnabled()) {
     if (!userId) {
       throw new Error("userId required when Supabase persistence is enabled");
     }
-    return saveCharacterProfileSheetSupabase(id, input, userId);
+    return persistProfileSheetAssetSupabase(id, input, assetKind, userId);
   }
-
-  const records = await readLocalIndex();
-  const stored = records.find((item) => item.id === id);
-  if (!stored) {
-    throw new CharacterProfileNotFoundError(id);
-  }
-
-  const ext = imageExtFromMime(input.mimeType);
-  const fileName = await writeLocalAsset(`sheet-${id}.${ext}`, input.bytes);
-  if (stored.sheetStoragePath && stored.sheetStoragePath !== fileName) {
-    await removeLocalAsset(stored.sheetStoragePath);
-  }
-  stored.sheetStoragePath = fileName;
-  stored.sheetMimeType = input.mimeType;
-  stored.updatedAt = new Date().toISOString();
-  await writeIndex(records);
-  return toRecordLocal(stored, userId);
+  return persistProfileSheetAssetLocal(id, input, assetKind, userId);
 }
 
-export async function saveMuapiCharacterSheet(
-  id: string,
-  input: SaveMuapiCharacterSheetInput,
-  userId?: string,
-): Promise<CharacterProfile> {
-  if (isSupabasePersistenceEnabled()) {
-    if (!userId) {
-      throw new Error("userId required when Supabase persistence is enabled");
-    }
-    return saveMuapiCharacterSheetSupabase(id, input, userId);
-  }
-
-  const records = await readLocalIndex();
-  const stored = records.find((item) => item.id === id);
-  if (!stored) {
-    throw new CharacterProfileNotFoundError(id);
-  }
-
-  const ext = imageExtFromMime(input.mimeType);
-  const fileName = await writeLocalAsset(`muapi-char-sheet-${id}.${ext}`, input.bytes);
-  if (
-    stored.muapiCharacterSheetStoragePath &&
-    stored.muapiCharacterSheetStoragePath !== fileName
-  ) {
-    await removeLocalAsset(stored.muapiCharacterSheetStoragePath);
-  }
-
-  stored.muapiCharacterRequestId = input.requestId;
-  stored.muapiCharacterSheetStoragePath = fileName;
-  stored.muapiCharacterSheetMimeType = input.mimeType;
-  stored.muapiCharacterSheetUpdatedAt = new Date().toISOString();
-  stored.updatedAt = stored.muapiCharacterSheetUpdatedAt;
-  await writeIndex(records);
-  return toRecordLocal(stored, userId);
-}
+/** @deprecated Use saveCharacterProfileSheet */
+export const saveMuapiCharacterSheet = saveCharacterProfileSheet;

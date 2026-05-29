@@ -4,10 +4,13 @@ import { ChangeEvent, useState } from "react";
 
 import { CharacterProfileForm } from "@/components/pipeline/steps/character/CharacterProfileForm";
 import type { CharacterProfile, ReferenceImage } from "@/components/pipeline/types";
+import { ConfirmAlertDialog } from "@/components/ui/confirm-alert-dialog";
 import type {
   CreateCharacterProfilePayload,
   UpdateCharacterProfilePayload,
 } from "@/hooks/useCharacterProfiles";
+import { Button } from "@/components/ui/button";
+import { OverlayIconButton } from "@/components/ui/overlay-icon-button";
 import { cn } from "@/lib/utils";
 import { Mic, Pencil, Plus, X } from "lucide-react";
 
@@ -55,6 +58,9 @@ export function CharacterProfileLibrary({
   onGenerateMuapiCharacterSheet,
 }: CharacterProfileLibraryProps) {
   const [formTarget, setFormTarget] = useState<"new" | string | null>(null);
+  const [profileToDelete, setProfileToDelete] = useState<CharacterProfile | null>(
+    null,
+  );
 
   const closeForm = () => setFormTarget(null);
   const openCreateForm = () => setFormTarget("new");
@@ -79,13 +85,13 @@ export function CharacterProfileLibrary({
                     : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:border-zinc-700",
                 )}
               >
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  className="h-auto w-full flex-col items-start gap-0 rounded-none p-0 text-left font-normal hover:bg-transparent"
                   onClick={() => onToggleRunProfile(profile)}
-                  className="block w-full text-left"
                 >
                   <span className="block truncate pr-8 font-semibold text-zinc-900 dark:text-zinc-100">
-                    {isSelected ? "In run — " : ""}
                     {profile.name}
                   </span>
                   <span className="mt-1 flex flex-wrap gap-2 text-xs text-zinc-500">
@@ -120,7 +126,7 @@ export function CharacterProfileLibrary({
                       ))}
                     </span>
                   ) : null}
-                </button>
+                </Button>
                 <span
                   className={cn(
                     "absolute right-2 top-2 z-10 flex items-center gap-1.5",
@@ -129,11 +135,10 @@ export function CharacterProfileLibrary({
                     "group-hover:pointer-events-auto group-hover:opacity-100",
                   )}
                 >
-                  <button
-                    type="button"
+                  <OverlayIconButton
                     disabled={busy}
+                    className="static"
                     aria-label={`Edit profile ${profile.name}`}
-                    className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white shadow-sm hover:bg-black/80 disabled:pointer-events-none disabled:opacity-40"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -141,32 +146,32 @@ export function CharacterProfileLibrary({
                     }}
                   >
                     <Pencil className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
-                  </button>
-                  <button
-                    type="button"
+                  </OverlayIconButton>
+                  <OverlayIconButton
                     disabled={busy}
+                    className="static"
                     aria-label={`Delete profile ${profile.name}`}
-                    className="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white shadow-sm hover:bg-black/80 disabled:pointer-events-none disabled:opacity-40"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      onDeleteProfile(profile);
+                      setProfileToDelete(profile);
                     }}
                   >
                     <X className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
-                  </button>
+                  </OverlayIconButton>
                 </span>
               </div>
             );
           })}
-          <button
+          <Button
             type="button"
+            variant="outline"
             disabled={busy}
             onClick={() =>
               formTarget === "new" ? closeForm() : openCreateForm()
             }
             className={cn(
-              "flex min-h-[88px] flex-col items-center justify-center gap-1 rounded-xl border border-dashed p-3 text-sm font-medium transition-all",
+              "flex h-auto min-h-[88px] w-full flex-col items-center justify-center gap-1 rounded-xl border-dashed p-3 text-sm font-medium",
               formTarget === "new"
                 ? "border-zinc-900 bg-white text-zinc-900 ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-900 dark:text-zinc-100 dark:ring-zinc-100"
                 : "border-zinc-300 text-zinc-600 hover:border-zinc-400 hover:bg-white dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/40",
@@ -174,7 +179,7 @@ export function CharacterProfileLibrary({
           >
             <Plus className="h-5 w-5" aria-hidden />
             {formTarget === "new" ? "Close" : "New Profile"}
-          </button>
+          </Button>
         </div>
         {staleRunSelection ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -200,6 +205,26 @@ export function CharacterProfileLibrary({
           </p>
         ) : null}
       </div>
+
+      <ConfirmAlertDialog
+        open={profileToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setProfileToDelete(null);
+        }}
+        title={
+          profileToDelete
+            ? `Delete “${profileToDelete.name}”?`
+            : "Delete profile?"
+        }
+        description="This permanently removes the character profile and its saved references from your library. This cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => {
+          if (profileToDelete) onDeleteProfile(profileToDelete);
+          setProfileToDelete(null);
+        }}
+      />
 
       {formTarget !== null ? (
         <CharacterProfileForm

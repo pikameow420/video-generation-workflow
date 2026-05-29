@@ -4,6 +4,7 @@ import type {
   RunCharacterSelection,
   ScriptMode,
   ScriptOption,
+  SheetScriptHistoryEntry,
   Step,
   WizardSnapshot,
 } from "@/components/pipeline/types";
@@ -12,7 +13,73 @@ import type { CharacterProfile, VideoProvider } from "@/lib/schemas";
 export const WIZARD_STORAGE_KEY = "video-pipeline-wizard-state-v1";
 export const MAX_MANUAL_SCRIPT_FILE_BYTES = 256 * 1024;
 export const MAX_REFERENCE_IMAGES = 9;
+export const SHEET_SCRIPT_HISTORY_MAX = 20;
 export const VIDEO_PROVIDER_STORAGE_KEY = "pipeline-video-provider";
+
+export function remainingScriptsForBatch(
+  scripts: ScriptOption[] | null,
+  title: string,
+  body: string,
+): Array<{ title: string; body: string }> {
+  const selectedKey = `${title}::${body}`;
+  if (!scripts?.length) return [];
+  return scripts
+    .filter((item) => `${item.title.trim()}::${item.body.trim()}` !== selectedKey)
+    .map((item) => ({ title: item.title, body: item.body }));
+}
+
+export function sheetScriptHistoryContains(
+  history: SheetScriptHistoryEntry[],
+  title: string,
+  body: string,
+): boolean {
+  const t = title.trim();
+  const b = body.trim();
+  return history.some(
+    (item) =>
+      item.selectedScript.title.trim() === t && item.selectedScript.body.trim() === b,
+  );
+}
+
+export function buildSheetScriptHistoryEntry(input: {
+  title: string;
+  body: string;
+  remainingScripts?: Array<{ title: string; body: string }>;
+}): SheetScriptHistoryEntry {
+  const title = input.title.trim() || "Untitled Script";
+  const body = input.body.trim();
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    selectedScript: { title, body },
+    remainingScripts: input.remainingScripts ?? [],
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export function upsertSheetScriptHistoryEntry(
+  prev: SheetScriptHistoryEntry[],
+  input: {
+    title: string;
+    body: string;
+    scripts?: ScriptOption[] | null;
+  },
+): SheetScriptHistoryEntry[] {
+  const title = input.title.trim() || "Untitled Script";
+  const body = input.body.trim();
+  if (!body) return prev;
+
+  const entry = buildSheetScriptHistoryEntry({
+    title,
+    body,
+    remainingScripts: remainingScriptsForBatch(input.scripts ?? null, title, body),
+  });
+  const deduped = prev.filter(
+    (item) =>
+      item.selectedScript.title.trim() !== title ||
+      item.selectedScript.body.trim() !== body,
+  );
+  return [entry, ...deduped].slice(0, SHEET_SCRIPT_HISTORY_MAX);
+}
 
 /** Default wizard state for a fresh pipeline run. */
 export function createEmptyWizardSnapshot(): WizardSnapshot {
@@ -33,6 +100,7 @@ export function createEmptyWizardSnapshot(): WizardSnapshot {
     scriptEdit: { title: "", body: "" },
     artDirection: "",
     runCharacters: [],
+    frameSheetExtraReferenceUrls: [],
     sheetUrl: null,
     sheetSource: "generated",
     sheetScriptHistory: [],
@@ -230,6 +298,12 @@ export function migrateWizardSnapshot(
   if (!next.runCharacters) {
     next.runCharacters = [];
   }
+  if (!next.frameSheetExtraReferenceUrls) {
+    next.frameSheetExtraReferenceUrls = [];
+  }
+  if (!next.sheetScriptHistory) {
+    next.sheetScriptHistory = [];
+  }
   delete next.videoExtraReferenceUrls;
   delete next.selectedCharacterProfileId;
   delete next.selectedReferenceUrls;
@@ -253,6 +327,11 @@ export function toggleRunCharacter(
       extraReferenceUrls: [],
     },
   ];
+}
+
+/** How many extra library refs can be attached for frame sheet (9 OpenAI slots minus character sheets). */
+export function maxFrameSheetExtraReferences(characterSheetCount: number): number {
+  return Math.max(0, MAX_REFERENCE_IMAGES - characterSheetCount);
 }
 
 export function buildCharacterAnchorsForSheet(

@@ -6,7 +6,7 @@ import {
 } from "@/lib/schemas";
 import {
   CharacterProfileNotFoundError,
-  saveCharacterProfileSheet,
+  saveProfileSheetImage,
 } from "@/lib/character-profiles/store";
 import { requireUser } from "@/lib/auth/require-user";
 
@@ -52,7 +52,7 @@ export async function PUT(
       );
     }
 
-    const updated = await saveCharacterProfileSheet(
+    const updated = await saveProfileSheetImage(
       parsedId.data,
       { bytes, mimeType },
       auth.user.id,

@@ -66,6 +66,8 @@ export type WizardSnapshot = {
   /** @deprecated Removed; extras are per-run on runCharacters.extraReferenceUrls. */
   videoExtraReferenceUrls?: string[];
   runCharacters: RunCharacterSelection[];
+  /** Extra library images steered into frame sheet generation (beyond character sheets). */
+  frameSheetExtraReferenceUrls: string[];
   sheetUrl: string | null;
   sheetSource: "generated" | "uploaded";
   sheetScriptHistory: SheetScriptHistoryEntry[];

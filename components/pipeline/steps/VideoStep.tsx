@@ -24,7 +24,7 @@ type VideoStepProps = {
   videoStoredInLibrary: boolean;
   onStartVideo: () => void;
   onGoTopic: () => void;
-  onStartNewRun: () => void;
+  onStartNewRun: () => void | Promise<void>;
   onGenerateSubtitles: () => void;
   onBurnSubtitles: () => void;
   onSubtitleLanguageChange: (next: SubtitleLanguage) => void;
@@ -141,7 +141,7 @@ export function VideoStep({
                   type="button"
                   variant="outline"
                   className="rounded-full"
-                  onClick={onStartNewRun}
+                  onClick={() => void onStartNewRun()}
                 >
                   Start new video
                 </Button>

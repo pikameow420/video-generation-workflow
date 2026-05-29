@@ -91,7 +91,8 @@ Paid and vault API routes call `requireUser()` and return **401** without a vali
 - `MUAPI_API_KEY` — MuAPI video path only ([authentication](https://muapi.ai/docs/authentication))
 - `VIDEO_PROVIDER` — default backend when the UI does not override: `atlas` or `muapi` (`lib/env.ts`)
 - `MUAPI_BASE_URL`, `MUAPI_VIDEO_ENDPOINT`, `MUAPI_VIDEO_DURATION` (4–15), `MUAPI_VIDEO_ASPECT_RATIO`, poll tuning — see `lib/env.ts`
-- `OPENAI_API_KEY` — character sheet + transcription (optional but needed for those steps)
+- `OPENAI_API_KEY` — profile character sheets (GPT Image 2 via edits), frame sequence sheet, transcription
+- `OPENAI_CHARACTER_SHEET_MODEL` (default `gpt-image-2`), `OPENAI_CHARACTER_SHEET_SIZE` (default `1080x1920`) — profile character sheets; frame sheet uses `OPENAI_IMAGE_MODEL` / `OPENAI_IMAGE_SIZE`
 - `UPLOAD_BACKEND` — `local` (default) or `blob`; affects reference images **only when Supabase persistence is not configured** (`blob` uses Vercel Blob)
 
 ### Supabase persistence (optional)
@@ -106,6 +107,7 @@ Apply migrations in [`supabase/migrations/`](supabase/migrations/):
 - `20250518120000_add_pipeline_videos_columns.sql` — `title`, `is_deleted`
 - `20250518130000_add_prediction_tracking.sql` — in-progress video job ownership
 - `20250524120000_character_profiles.sql` — `character_profiles` table + `character-assets` bucket
+- `20250526120000_character_profile_muapi_sheet.sql` — character reference sheet columns on `character_profiles` (`muapi_character_*`)
 
 **Character profiles (local fallback when persistence off):** profile metadata in `CHARACTER_PROFILE_INDEX_PATH` (default `data/character-profiles.json`); voice samples and saved sheets under `LOCAL_CHARACTER_ASSET_DIR` (default `public/uploads/character-assets`).
 

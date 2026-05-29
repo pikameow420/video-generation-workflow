@@ -10,9 +10,12 @@ import type {
 } from "@/hooks/useCharacterProfiles";
 import { useProfileSheetGeneration } from "@/hooks/useProfileSheetGeneration";
 import { Button } from "@/components/ui/button";
+import { ImagePreviewDialog } from "@/components/ui/image-preview-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PreviewableImage } from "@/components/ui/previewable-image";
 import { Spinner } from "@/components/ui/spinner";
+import { useImagePreview } from "@/hooks/useImagePreview";
 import { Mic } from "lucide-react";
 
 function initialProfileFields(
@@ -94,6 +97,7 @@ export function CharacterProfileForm({
     fields;
   const [savingProfile, setSavingProfile] = useState(false);
   const { generatingCharSheet, generateSheetFromForm } = useProfileSheetGeneration();
+  const imagePreview = useImagePreview();
 
   const existingVoiceName =
     formKeepExistingVoice && !formVoiceFile
@@ -224,11 +228,13 @@ export function CharacterProfileForm({
           </p>
           {editingProfile.muapiCharacterSheetUrl ? (
             <div className="flex flex-wrap items-start gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <PreviewableImage
                 src={editingProfile.muapiCharacterSheetUrl}
                 alt={`Character sheet for ${editingProfile.name}`}
-                className="max-h-24 rounded-md border object-contain dark:border-zinc-700"
+                previewTitle={`Character sheet — ${editingProfile.name}`}
+                onPreview={imagePreview.open}
+                className="max-w-xs rounded-md border dark:border-zinc-700"
+                imageClassName="max-h-32 object-contain"
               />
               {editingProfile.muapiCharacterSheetUpdatedAt ? (
                 <p className="text-xs text-zinc-500">
@@ -300,25 +306,29 @@ export function CharacterProfileForm({
           {formVoiceFile ? (
             <span className="inline-flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400">
               <Mic className="h-3 w-3" aria-hidden /> {formVoiceFile.name} (new)
-              <button
+              <Button
                 type="button"
+                variant="link"
+                size="xs"
                 aria-label="Remove voice sample"
-                className="ml-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                className="ml-1 h-auto min-h-0 p-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                 onClick={() =>
                   setFields((prev) => ({ ...prev, formVoiceFile: null }))
                 }
               >
                 ×
-              </button>
+              </Button>
             </span>
           ) : existingVoiceName ? (
             <span className="inline-flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400">
               <Mic className="h-3 w-3" aria-hidden /> {existingVoiceName}{" "}
               (current)
-              <button
+              <Button
                 type="button"
+                variant="link"
+                size="xs"
                 aria-label="Remove current voice sample"
-                className="ml-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                className="ml-1 h-auto min-h-0 p-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                 onClick={() =>
                   setFields((prev) => ({
                     ...prev,
@@ -327,14 +337,16 @@ export function CharacterProfileForm({
                 }
               >
                 ×
-              </button>
+              </Button>
             </span>
           ) : editingProfile?.voiceSample && !formKeepExistingVoice ? (
             <span className="text-xs text-zinc-500">
               Current voice sample will be removed on save.{" "}
-              <button
+              <Button
                 type="button"
-                className="underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                variant="link"
+                size="xs"
+                className="h-auto min-h-0 p-0 underline"
                 onClick={() =>
                   setFields((prev) => ({
                     ...prev,
@@ -343,7 +355,7 @@ export function CharacterProfileForm({
                 }
               >
                 Undo
-              </button>
+              </Button>
             </span>
           ) : null}
         </div>
@@ -376,6 +388,8 @@ export function CharacterProfileForm({
           Cancel
         </Button>
       </div>
+
+      <ImagePreviewDialog preview={imagePreview.preview} onClose={imagePreview.close} />
     </div>
   );
 }

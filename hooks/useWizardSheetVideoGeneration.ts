@@ -33,9 +33,11 @@ type UseWizardSheetVideoGenerationOptions = {
     characterSheetUrl: string;
     referenceImageUrls?: string[];
   }>;
+  frameSheetExtraReferenceUrls: string[];
   frameSheetReadiness: RunReadinessResult;
   muapiVideoReadiness: RunReadinessResult;
-  trackSheetScriptSelection: () => void;
+  recordSheetScriptHistory: () => void;
+  recordSheetScriptHistoryWhenReady: () => void;
   setSheetUrl: Dispatch<SetStateAction<string | null>>;
   setSheetSource: Dispatch<SetStateAction<"generated" | "uploaded">>;
   setStep: Dispatch<SetStateAction<Step>>;
@@ -67,9 +69,11 @@ export function useWizardSheetVideoGeneration(
     runProfileIds,
     saveSheetToSelectedProfiles,
     buildCharacterAnchors,
+    frameSheetExtraReferenceUrls,
     frameSheetReadiness,
     muapiVideoReadiness,
-    trackSheetScriptSelection,
+    recordSheetScriptHistory,
+    recordSheetScriptHistoryWhenReady,
     setSheetUrl,
     setSheetSource,
     setStep,
@@ -97,12 +101,14 @@ export function useWizardSheetVideoGeneration(
     try {
       await maybeSaveGeneratedScript();
       const characterAnchors = buildCharacterAnchors();
+      const extraRefs = frameSheetExtraReferenceUrls.map((u) => u.trim()).filter(Boolean);
       const data = await postJson(
         "/api/frame-sequence-sheet",
         {
           scriptTitle: scriptEdit.title,
           scriptBody: scriptEdit.body,
           artDirection: artDirection || undefined,
+          referenceImageUrls: extraRefs.length ? extraRefs : undefined,
           characterAnchors: characterAnchors.length ? characterAnchors : undefined,
         },
         "Frame sequence sheet failed",
@@ -110,7 +116,7 @@ export function useWizardSheetVideoGeneration(
       );
       setSheetUrl(data.imageDataUrl);
       setSheetSource("generated");
-      trackSheetScriptSelection();
+      recordSheetScriptHistory();
       setStep("sheet");
       toast.success("Frame sequence sheet generated.");
       await saveSheetToSelectedProfiles(data.imageDataUrl);
@@ -125,6 +131,7 @@ export function useWizardSheetVideoGeneration(
   }, [
     artDirection,
     buildCharacterAnchors,
+    frameSheetExtraReferenceUrls,
     frameSheetReadiness,
     maybeSaveGeneratedScript,
     saveSheetToSelectedProfiles,
@@ -134,7 +141,7 @@ export function useWizardSheetVideoGeneration(
     setSheetSource,
     setSheetUrl,
     setStep,
-    trackSheetScriptSelection,
+    recordSheetScriptHistory,
   ]);
 
   const startVideo = useCallback(async () => {
@@ -194,6 +201,7 @@ export function useWizardSheetVideoGeneration(
         setPendingVideoJob(job);
         setVideoMeta({ predictionId: data.predictionId });
         setVideoStatus("Generating video…");
+        recordSheetScriptHistoryWhenReady();
         jobStarted = true;
       } finally {
         if (!jobStarted) setVideoGenerationBusy(false);
@@ -215,6 +223,7 @@ export function useWizardSheetVideoGeneration(
     setVideoGenerationBusy,
     setVideoMeta,
     setVideoStatus,
+    recordSheetScriptHistoryWhenReady,
     videoProvider,
   ]);
 

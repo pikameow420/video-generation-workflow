@@ -141,9 +141,10 @@ export function LoginForm() {
 
         <p className="mt-4 text-center text-sm text-zinc-600 dark:text-zinc-400">
           {mode === "sign-in" ? "Need an account?" : "Already registered?"}{" "}
-          <button
+          <Button
             type="button"
-            className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            variant="link"
+            className="h-auto p-0 text-emerald-700 dark:text-emerald-400"
             onClick={() => {
               setMode(mode === "sign-in" ? "sign-up" : "sign-in");
               setError(null);
@@ -151,7 +152,7 @@ export function LoginForm() {
             }}
           >
             {mode === "sign-in" ? "Create one" : "Sign in"}
-          </button>
+          </Button>
         </p>
       </CardContent>
     </Card>

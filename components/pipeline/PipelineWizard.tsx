@@ -26,9 +26,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   createEmptyWizardSnapshot,
   getWizardStepStates,
+  sheetScriptHistoryContains,
+  upsertSheetScriptHistoryEntry,
   WIZARD_STORAGE_KEY,
 } from "@/lib/pipeline/wizard-utils";
 import { useApiAction } from "@/hooks/useApiAction";
+import { useConfirmAlertDialog } from "@/hooks/useConfirmAlertDialog";
 import { useCreatorPresets } from "@/hooks/useCreatorPresets";
 import { useWizardCharacterStep } from "@/hooks/useWizardCharacterStep";
 import { useWizardScriptsFlow } from "@/hooks/useWizardScriptsFlow";
@@ -129,6 +132,8 @@ export function PipelineWizard() {
     clearError: () => setError(null),
   });
 
+  const { confirm, dialog: confirmDialog } = useConfirmAlertDialog();
+
   const {
     loadReferenceImages,
     loadSavedScripts,
@@ -140,18 +145,6 @@ export function PipelineWizard() {
     setSavedScripts,
     setSavedScriptsLoaded,
     setLoadingSavedScripts,
-    setError,
-  });
-
-  useWizardPendingVideoJob({
-    pendingVideoJob,
-    setVideoUrl,
-    setVideoMeta,
-    setVideoHasCaptions,
-    setPendingVideoJob,
-    setVideoStatus,
-    setVideoGenerationBusy,
-    setStep,
     setError,
   });
 
@@ -178,6 +171,15 @@ export function PipelineWizard() {
 
   const selectedScript = scripts?.find((script) => script.id === selectedId) ?? null;
   const currentBatchPrimaryScript = selectedScript ?? scripts?.[0] ?? null;
+  const activeScript = useMemo(() => {
+    const body = scriptEdit.body.trim();
+    if (!body) return null;
+    return {
+      title: scriptEdit.title.trim() || "Untitled Script",
+      body,
+    };
+  }, [scriptEdit.body, scriptEdit.title]);
+
   const currentBatchRemainingScripts =
     scripts?.filter((script) => script.id !== currentBatchPrimaryScript?.id) ??
     [];
@@ -238,7 +240,7 @@ export function PipelineWizard() {
   });
 
   const {
-    trackSheetScriptSelection,
+    recordSheetScriptHistory,
     onPickScript,
     onScriptEditChange,
     maybeSaveGeneratedScript,
@@ -249,6 +251,23 @@ export function PipelineWizard() {
     applyScriptFromHistory,
     continueToCharacterStep,
   } = scriptsFlow;
+
+  const recordSheetScriptHistoryWhenReady = useCallback(() => {
+    if (!sheetUrl?.trim()) return;
+    recordSheetScriptHistory();
+  }, [recordSheetScriptHistory, sheetUrl]);
+
+  useWizardPendingVideoJob({
+    pendingVideoJob,
+    setVideoUrl,
+    setVideoMeta,
+    setVideoHasCaptions,
+    setPendingVideoJob,
+    setVideoStatus,
+    setVideoGenerationBusy,
+    setStep,
+    setError,
+  });
 
   const clearVideoOutputs = useCallback(() => {
     setVideoUrl(null);
@@ -268,10 +287,10 @@ export function PipelineWizard() {
       clearVideoOutputs();
       setSheetUrl(args.sheetUrl);
       setSheetSource(args.sheetSource);
-      if (args.trackHistory) trackSheetScriptSelection();
+      if (args.trackHistory) recordSheetScriptHistory();
       setStep("sheet");
     },
-    [clearVideoOutputs, trackSheetScriptSelection],
+    [clearVideoOutputs, recordSheetScriptHistory],
   );
 
   const character = useWizardCharacterStep({
@@ -306,6 +325,10 @@ export function PipelineWizard() {
     onUploadReference,
     deleteReferenceFromLibrary,
     referenceLibraryBusy,
+    frameSheetExtraReferenceUrls,
+    maxFrameSheetExtras,
+    onToggleFrameSheetExtraReference,
+    isFrameSheetExtraReferenceSelected,
   } = character;
 
   const frameSheetBlockedReason = useMemo(
@@ -348,7 +371,7 @@ export function PipelineWizard() {
   );
 
   const navigateToStep = useCallback(
-    (next: Step) => {
+    async (next: Step) => {
       if (next === step) return;
       if (!stepStates[next].accessible) return;
 
@@ -362,9 +385,12 @@ export function PipelineWizard() {
         next !== "video" &&
         (pendingVideoJob !== null || videoGenerationBusy)
       ) {
-        const ok = window.confirm(
-          "A video is still generating or processing. Leave this step? You can come back via the Video step.",
-        );
+        const ok = await confirm({
+          title: "Leave video step?",
+          description:
+            "A video is still generating or processing. Leave this step? You can come back via the Video step.",
+          confirmLabel: "Leave",
+        });
         if (!ok) return;
       }
 
@@ -380,6 +406,7 @@ export function PipelineWizard() {
     },
     [
       busy,
+      confirm,
       refreshCharacterProfiles,
       loadReferenceImages,
       loadSavedScripts,
@@ -476,8 +503,26 @@ export function PipelineWizard() {
       restoreCharacterSnapshot(loaded);
       if (loaded.sheetUrl !== undefined) setSheetUrl(loaded.sheetUrl);
       if (loaded.sheetSource) setSheetSource(loaded.sheetSource);
-      if (loaded.sheetScriptHistory) {
-        setSheetScriptHistory(loaded.sheetScriptHistory);
+      const restoredSheetUrl = loaded.sheetUrl?.trim();
+      const restoredBody = loaded.scriptEdit?.body?.trim();
+      const shouldRestoreHistory =
+        loaded.sheetScriptHistory !== undefined ||
+        Boolean(restoredSheetUrl && restoredBody && loaded.scriptEdit);
+      if (shouldRestoreHistory) {
+        setSheetScriptHistory((prev) => {
+          let next = loaded.sheetScriptHistory ?? prev;
+          if (restoredSheetUrl && restoredBody && loaded.scriptEdit) {
+            const title = loaded.scriptEdit.title.trim() || "Untitled Script";
+            if (!sheetScriptHistoryContains(next, title, restoredBody)) {
+              next = upsertSheetScriptHistoryEntry(next, {
+                title,
+                body: restoredBody,
+                scripts: loaded.scripts ?? null,
+              });
+            }
+          }
+          return next;
+        });
       }
       if (loaded.videoUrl !== undefined) setVideoUrl(loaded.videoUrl);
       if (loaded.videoMeta !== undefined) setVideoMeta(loaded.videoMeta);
@@ -566,9 +611,11 @@ export function PipelineWizard() {
     characterProfiles,
     saveSheetToSelectedProfiles,
     buildCharacterAnchors,
+    frameSheetExtraReferenceUrls,
     frameSheetReadiness,
     muapiVideoReadiness,
-    trackSheetScriptSelection,
+    recordSheetScriptHistory,
+    recordSheetScriptHistoryWhenReady,
     setSheetUrl,
     setSheetSource,
     setStep,
@@ -584,16 +631,19 @@ export function PipelineWizard() {
     setVideoMeta,
   });
 
-  const onStartNewRun = useCallback(() => {
+  const onStartNewRun = useCallback(async () => {
     const hasInFlightJob =
       pendingVideoJob !== null ||
       videoGenerationBusy ||
       (busy && step === "video" && !videoUrl);
 
     if (hasInFlightJob) {
-      const ok = window.confirm(
-        "A video is still generating or processing. Start a new run anyway? This job will no longer be tracked in the wizard.",
-      );
+      const ok = await confirm({
+        title: "Start a new run?",
+        description:
+          "A video is still generating or processing. Start a new run anyway? This job will no longer be tracked in the wizard.",
+        confirmLabel: "Start new run",
+      });
       if (!ok) return;
     }
 
@@ -609,6 +659,7 @@ export function PipelineWizard() {
   }, [
     busy,
     clearMuapiAudio,
+    confirm,
     pendingVideoJob,
     restoreSnapshot,
     step,
@@ -761,6 +812,14 @@ export function PipelineWizard() {
             onArtDirectionChange,
             onReuseProfileSheet: reuseProfileSheet,
             onGenerateSheet: () => void generateSheet(),
+            referenceImages,
+            loadingReferenceImages,
+            referenceLibraryBusy,
+            onUploadReference,
+            maxFrameSheetExtras,
+            frameSheetExtraReferenceUrls,
+            isFrameSheetExtraReferenceSelected,
+            onToggleFrameSheetExtraReference,
           }}
         />
       ) : isCharacterDone && scriptEdit.body.trim() ? (
@@ -799,11 +858,7 @@ export function PipelineWizard() {
           onMuapiAudioFilesChange={onMuapiAudioFilesChange}
           onClearMuapiAudio={clearMuapiAudio}
           onStartVideo={() => void startVideo()}
-          onRegenerate={() =>
-            sheetSource === "uploaded"
-              ? navigateToStep("character")
-              : void generateSheet()
-          }
+          onRegenerate={() => navigateToStep("character")}
         />
       ) : isSheetDone && sheetUrl ? (
         <WizardSummaryCard
@@ -842,12 +897,17 @@ export function PipelineWizard() {
         isOpen={isScriptSidebarOpen}
         loadingSavedScripts={loadingSavedScripts}
         savedScriptsLoaded={savedScriptsLoaded}
+        savedScripts={savedScripts}
         currentBatchPrimaryScript={currentBatchPrimaryScript}
         currentBatchRemainingScripts={currentBatchRemainingScripts}
+        activeScript={activeScript}
         expandedHistoryId={expandedHistoryId}
         sheetScriptHistory={sheetScriptHistory}
         onToggle={toggleScriptSidebar}
         onRefresh={() => void loadSavedScripts()}
+        onApplySavedScript={(script) => {
+          applyScriptFromHistory({ title: script.title, body: script.body });
+        }}
         onPickCurrentBatchScript={(id) => {
           onPickScript(id);
           navigateToStep("scripts");
@@ -856,6 +916,7 @@ export function PipelineWizard() {
         onExpandedHistoryIdChange={setExpandedHistoryId}
       />
       </div>
+      {confirmDialog}
     </div>
   );
 }

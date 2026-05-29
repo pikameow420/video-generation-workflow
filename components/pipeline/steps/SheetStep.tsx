@@ -3,7 +3,11 @@
 import type { ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ImagePreviewDialog } from "@/components/ui/image-preview-dialog";
+import { PreviewableImage } from "@/components/ui/previewable-image";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
+import { useImagePreview } from "@/hooks/useImagePreview";
 import type { VideoProvider } from "@/lib/schemas";
 
 type SheetStepProps = {
@@ -31,7 +35,6 @@ type SheetStepProps = {
 export function SheetStep({
   busy,
   sheetUrl,
-  sheetSource,
   videoProvider,
   onVideoProviderChange,
   videoProviderEnvLoaded,
@@ -46,6 +49,8 @@ export function SheetStep({
   onStartVideo,
   onRegenerate,
 }: SheetStepProps) {
+  const imagePreview = useImagePreview();
+
   return (
     <Card className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl border-zinc-200 bg-white shadow-sm duration-300 dark:border-zinc-800 dark:bg-zinc-950/50">
       <CardHeader>
@@ -57,13 +62,21 @@ export function SheetStep({
         </div>
       </CardHeader>
       <CardContent className="space-y-5 pb-6">
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/30">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={sheetUrl}
-            alt="Frame sequence sheet reference"
-            className="max-h-[400px] w-full object-contain"
-          />
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/30">
+          <ScrollArea className="h-[min(70vh,720px)] w-full">
+            <PreviewableImage
+              src={sheetUrl}
+              alt="Frame sequence sheet reference"
+              previewTitle="Frame sequence sheet"
+              onPreview={imagePreview.open}
+              className="rounded-xl"
+              imageClassName="object-contain"
+            />
+          </ScrollArea>
+          <p className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800">
+            Click the image to view full size. Scroll if the sheet is taller than the
+            preview area.
+          </p>
         </div>
 
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -113,12 +126,10 @@ export function SheetStep({
             {busy && !videoGenerationBusy ? (
               <>
                 <Spinner className="mr-2 h-4 w-4" />
-                {sheetSource === "uploaded" ? "Opening…" : "Regenerating…"}
+                Opening…
               </>
-            ) : sheetSource === "uploaded" ? (
-              "Replace Reference"
             ) : (
-              "Regenerate Image"
+              "Edit & Regenerate"
             )}
           </Button>
         </div>
@@ -185,6 +196,8 @@ export function SheetStep({
           </div>
         ) : null}
       </CardContent>
+
+      <ImagePreviewDialog preview={imagePreview.preview} onClose={imagePreview.close} />
     </Card>
   );
 }

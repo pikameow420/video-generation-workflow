@@ -1,25 +1,37 @@
 "use client";
 
+import { useMemo } from "react";
+
+import {
+  ScriptHistoryAlternateRow,
+  ScriptHistoryEntryRow,
+  ScriptHistoryExpandToggle,
+} from "@/components/pipeline/ScriptHistoryEntryRow";
 import type {
+  SavedScript,
   ScriptOption,
   SheetScriptHistoryEntry,
 } from "@/components/pipeline/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { dedupeByTitleBody } from "@/lib/scripts/dedupe";
 
 type ScriptHistorySidebarProps = {
   isOpen: boolean;
   loadingSavedScripts: boolean;
   savedScriptsLoaded: boolean;
+  savedScripts: SavedScript[];
   currentBatchPrimaryScript: ScriptOption | null;
   currentBatchRemainingScripts: ScriptOption[];
+  activeScript: { title: string; body: string } | null;
   expandedHistoryId: string | null;
   sheetScriptHistory: SheetScriptHistoryEntry[];
   onToggle: () => void;
   onRefresh: () => void;
   onPickCurrentBatchScript: (id: string) => void;
   onApplyHistoryScript: (script: { title: string; body: string }) => void;
+  onApplySavedScript: (script: SavedScript) => void;
   onExpandedHistoryIdChange: (next: string | null) => void;
 };
 
@@ -27,18 +39,30 @@ export function ScriptHistorySidebar({
   isOpen,
   loadingSavedScripts,
   savedScriptsLoaded,
+  savedScripts,
   currentBatchPrimaryScript,
   currentBatchRemainingScripts,
+  activeScript,
   expandedHistoryId,
   sheetScriptHistory,
   onToggle,
   onRefresh,
   onPickCurrentBatchScript,
   onApplyHistoryScript,
+  onApplySavedScript,
   onExpandedHistoryIdChange,
 }: ScriptHistorySidebarProps) {
+  const uniqueSavedScripts = useMemo(
+    () => dedupeByTitleBody(savedScripts),
+    [savedScripts],
+  );
+  const hasSheetHistory = sheetScriptHistory.length > 0;
+  const hasSavedScripts = uniqueSavedScripts.length > 0;
   const hasScriptsToShow = Boolean(
-    currentBatchPrimaryScript || sheetScriptHistory.length,
+    currentBatchPrimaryScript ||
+      activeScript ||
+      hasSheetHistory ||
+      hasSavedScripts,
   );
 
   return (
@@ -54,162 +78,169 @@ export function ScriptHistorySidebar({
       </Button>
 
       {isOpen ? (
-        <Card className="w-[320px] gap-4 rounded-3xl border-zinc-200 bg-white p-4 shadow-xl shadow-zinc-200/60 dark:border-zinc-800 dark:bg-zinc-950/95 dark:shadow-black/20">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                Script History
-              </h3>
-              <p className="mt-0.5 text-[11px] text-zinc-500">
-                Selected script visible, alternates tucked below.
-              </p>
+        <Card className="flex w-[320px] max-h-[min(80vh,640px)] flex-col overflow-hidden rounded-3xl border-zinc-200 bg-white p-0 shadow-xl shadow-zinc-200/60 dark:border-zinc-800 dark:bg-zinc-950/95 dark:shadow-black/20">
+          <div className="shrink-0 space-y-3 border-b border-zinc-100 p-4 dark:border-zinc-800">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Script History
+                </h3>
+                <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">
+                  Scripts used with a frame sheet; saved library scripts below.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={onRefresh}
+                disabled={loadingSavedScripts}
+                className="shrink-0 rounded-full"
+              >
+                {loadingSavedScripts ? "..." : "Load saved"}
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              onClick={onRefresh}
-              disabled={loadingSavedScripts}
-              className="rounded-full"
-            >
-              {loadingSavedScripts ? "..." : "Refresh"}
-            </Button>
+
+            {!hasScriptsToShow && !savedScriptsLoaded && !loadingSavedScripts ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onRefresh}
+                className="w-full rounded-lg"
+              >
+                Load saved scripts
+              </Button>
+            ) : null}
           </div>
 
-          {!hasScriptsToShow && !savedScriptsLoaded && !loadingSavedScripts ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onRefresh}
-              className="w-full rounded-lg"
-            >
-              Load previous scripts
-            </Button>
-          ) : null}
-
-          <ScrollArea className="max-h-[62vh] pr-1">
-            {currentBatchPrimaryScript ? (
-              <div className="space-y-2">
-                <div className="group space-y-1.5">
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => onPickCurrentBatchScript(currentBatchPrimaryScript.id)}
-                      className="w-full rounded-2xl border border-zinc-200 bg-white p-3 pr-28 text-left text-xs shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-                    >
-                      <p className="line-clamp-1 font-semibold text-zinc-900 dark:text-zinc-100">
-                        {currentBatchPrimaryScript.title}
-                      </p>
-                      <p className="line-clamp-2 text-zinc-600 dark:text-zinc-400">
-                        {currentBatchPrimaryScript.body}
-                      </p>
-                      <span className="mt-2 inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800">
-                        Current batch
-                      </span>
-                    </button>
-                    {currentBatchRemainingScripts.length ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onExpandedHistoryIdChange(
-                            expandedHistoryId === "__current_batch__"
-                              ? null
-                              : "__current_batch__",
-                          )
-                        }
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-700 shadow-sm transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                      >
-                        {expandedHistoryId === "__current_batch__" ? "Hide" : "View"}{" "}
-                        {currentBatchRemainingScripts.length}
-                      </button>
-                    ) : null}
-                  </div>
-
-                  {expandedHistoryId === "__current_batch__" ? (
-                    <div className="space-y-1.5 pl-3">
-                      {currentBatchRemainingScripts.map((remaining) => (
-                        <button
-                          key={`current-batch-remaining-${remaining.id}`}
-                          type="button"
-                          onClick={() => onPickCurrentBatchScript(remaining.id)}
-                          className="w-full rounded-xl border border-sky-200 bg-sky-50 p-2.5 text-left text-xs transition hover:border-sky-300 hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/40 dark:hover:bg-sky-900/40"
-                        >
-                          <p className="line-clamp-1 font-semibold text-sky-900 dark:text-sky-200">
-                            {remaining.title}
-                          </p>
-                          <p className="line-clamp-2 text-sky-700 dark:text-sky-300">
-                            {remaining.body}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : sheetScriptHistory.length ? (
-              <div className="space-y-2">
-                {sheetScriptHistory.map((item) => (
-                  <div key={item.id} className="group space-y-1.5">
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="space-y-4 p-4">
+              {currentBatchPrimaryScript ? (
+                <div className="space-y-2">
+                  <div className="group space-y-1.5">
                     <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => onApplyHistoryScript(item.selectedScript)}
-                        className="w-full rounded-2xl border border-zinc-200 bg-white p-3 pr-28 text-left text-xs shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-                      >
-                        <p className="line-clamp-1 font-semibold text-zinc-900 dark:text-zinc-100">
-                          {item.selectedScript.title}
-                        </p>
-                        <p className="line-clamp-2 text-zinc-600 dark:text-zinc-400">
-                          {item.selectedScript.body}
-                        </p>
-                        <span className="mt-2 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                          Sheet generated
-                        </span>
-                      </button>
-                      {item.remainingScripts.length ? (
-                        <button
-                          type="button"
-                          onClick={() =>
+                      <ScriptHistoryEntryRow
+                        title={currentBatchPrimaryScript.title}
+                        body={currentBatchPrimaryScript.body}
+                        badge={{ label: "Current batch", variant: "batch" }}
+                        onSelect={() =>
+                          onPickCurrentBatchScript(currentBatchPrimaryScript.id)
+                        }
+                        reserveToggleSpace={currentBatchRemainingScripts.length > 0}
+                      />
+                      {currentBatchRemainingScripts.length > 0 ? (
+                        <ScriptHistoryExpandToggle
+                          expanded={expandedHistoryId === "__current_batch__"}
+                          count={currentBatchRemainingScripts.length}
+                          onToggle={() =>
                             onExpandedHistoryIdChange(
-                              expandedHistoryId === item.id ? null : item.id,
+                              expandedHistoryId === "__current_batch__"
+                                ? null
+                                : "__current_batch__",
                             )
                           }
-                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-700 shadow-sm transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                        >
-                          {expandedHistoryId === item.id ? "Hide" : "View"}{" "}
-                          {item.remainingScripts.length}
-                        </button>
+                        />
                       ) : null}
                     </div>
-
-                    {expandedHistoryId === item.id ? (
+                    {expandedHistoryId === "__current_batch__" ? (
                       <div className="space-y-1.5 pl-3">
-                        {item.remainingScripts.map((remaining, index) => (
-                          <button
-                            key={`${item.id}-remaining-${index}`}
-                            type="button"
-                            onClick={() => onApplyHistoryScript(remaining)}
-                            className="w-full rounded-xl border border-sky-200 bg-sky-50 p-2.5 text-left text-xs transition hover:border-sky-300 hover:bg-sky-100 dark:border-sky-900/60 dark:bg-sky-950/40 dark:hover:bg-sky-900/40"
-                          >
-                            <p className="line-clamp-1 font-semibold text-sky-900 dark:text-sky-200">
-                              {remaining.title}
-                            </p>
-                            <p className="line-clamp-2 text-sky-700 dark:text-sky-300">
-                              {remaining.body}
-                            </p>
-                          </button>
+                        {currentBatchRemainingScripts.map((remaining) => (
+                          <ScriptHistoryAlternateRow
+                            key={`current-batch-remaining-${remaining.id}`}
+                            title={remaining.title}
+                            body={remaining.body}
+                            onSelect={() => onPickCurrentBatchScript(remaining.id)}
+                          />
                         ))}
                       </div>
                     ) : null}
                   </div>
-                ))}
-              </div>
-            ) : savedScriptsLoaded && !loadingSavedScripts ? (
-              <p className="text-xs text-zinc-500">
-                No script has completed sheet generation yet. Generate a batch to see your
-                selected script here.
-              </p>
-            ) : null}
+                </div>
+              ) : activeScript ? (
+                <ScriptHistoryEntryRow
+                  title={activeScript.title}
+                  body={activeScript.body}
+                  badge={{ label: "Current script", variant: "current" }}
+                  onSelect={() => onApplyHistoryScript(activeScript)}
+                />
+              ) : null}
+
+              {hasSheetHistory ? (
+                <div className="space-y-2">
+                  {currentBatchPrimaryScript || activeScript ? (
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                      Sheet generated
+                    </p>
+                  ) : null}
+                  {sheetScriptHistory.map((item) => (
+                    <div key={item.id} className="group space-y-1.5">
+                      <div className="relative">
+                        <ScriptHistoryEntryRow
+                          title={item.selectedScript.title}
+                          body={item.selectedScript.body}
+                          badge={{ label: "Sheet generated", variant: "sheet" }}
+                          onSelect={() => onApplyHistoryScript(item.selectedScript)}
+                          reserveToggleSpace={item.remainingScripts.length > 0}
+                        />
+                        {item.remainingScripts.length > 0 ? (
+                          <ScriptHistoryExpandToggle
+                            expanded={expandedHistoryId === item.id}
+                            count={item.remainingScripts.length}
+                            onToggle={() =>
+                              onExpandedHistoryIdChange(
+                                expandedHistoryId === item.id ? null : item.id,
+                              )
+                            }
+                          />
+                        ) : null}
+                      </div>
+                      {expandedHistoryId === item.id ? (
+                        <div className="space-y-1.5 pl-3">
+                          {item.remainingScripts.map((remaining, index) => (
+                            <ScriptHistoryAlternateRow
+                              key={`${item.id}-remaining-${index}`}
+                              title={remaining.title}
+                              body={remaining.body}
+                              onSelect={() => onApplyHistoryScript(remaining)}
+                            />
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {savedScriptsLoaded && hasSavedScripts ? (
+                <div className="space-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                    Saved scripts
+                  </p>
+                  {uniqueSavedScripts.map((script) => (
+                    <ScriptHistoryEntryRow
+                      key={script.id}
+                      title={script.title}
+                      body={script.body}
+                      badge={{ label: script.source, variant: "saved" }}
+                      onSelect={() => onApplySavedScript(script)}
+                    />
+                  ))}
+                </div>
+              ) : savedScriptsLoaded && !loadingSavedScripts && !hasSavedScripts ? (
+                <p className="border-t border-zinc-100 pt-3 text-xs text-zinc-500 dark:border-zinc-800">
+                  No saved scripts in the library yet.
+                </p>
+              ) : null}
+
+              {!hasScriptsToShow &&
+              savedScriptsLoaded &&
+              !loadingSavedScripts ? (
+                <p className="text-xs text-zinc-500">
+                  No scripts in this run yet. History lists scripts that reached a
+                  frame sheet or video step; finished videos live in the video library.
+                </p>
+              ) : null}
+            </div>
           </ScrollArea>
         </Card>
       ) : null}

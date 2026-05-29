@@ -19,6 +19,8 @@ import {
 } from "@/lib/pipeline/run-readiness";
 import {
   buildCharacterAnchorsForSheet,
+  MAX_REFERENCE_IMAGES,
+  maxFrameSheetExtraReferences,
   migrateWizardSnapshot,
   toggleRunCharacter,
 } from "@/lib/pipeline/wizard-utils";
@@ -26,7 +28,7 @@ import { referenceImageSchema } from "@/lib/schemas";
 
 type CharacterSnapshotFields = Pick<
   WizardSnapshot,
-  "artDirection" | "runCharacters"
+  "artDirection" | "runCharacters" | "frameSheetExtraReferenceUrls"
 >;
 
 export type AdvanceToSheet = (args: {
@@ -64,6 +66,8 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
     [],
   );
   const [artDirection, setArtDirection] = useState("");
+  const [frameSheetExtraReferenceUrls, setFrameSheetExtraReferenceUrls] =
+    useState<string[]>([]);
   const [referenceLibraryBusy, setReferenceLibraryBusy] = useState(false);
 
   const {
@@ -91,8 +95,9 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
     () => ({
       artDirection,
       runCharacters,
+      frameSheetExtraReferenceUrls,
     }),
-    [artDirection, runCharacters],
+    [artDirection, runCharacters, frameSheetExtraReferenceUrls],
   );
 
   const restoreCharacterSnapshot = useCallback(
@@ -104,8 +109,57 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
       if (migrated.runCharacters !== undefined) {
         setRunCharacters(migrated.runCharacters);
       }
+      if (migrated.frameSheetExtraReferenceUrls !== undefined) {
+        setFrameSheetExtraReferenceUrls(migrated.frameSheetExtraReferenceUrls);
+      }
     },
     [],
+  );
+
+  const characterSheetCount = useMemo(
+    () =>
+      runCharacters.filter((run) => {
+        const profile = characterProfiles.find((p) => p.id === run.profileId);
+        return Boolean(profile?.muapiCharacterSheetUrl);
+      }).length,
+    [characterProfiles, runCharacters],
+  );
+
+  const maxFrameSheetExtras = useMemo(
+    () => maxFrameSheetExtraReferences(characterSheetCount),
+    [characterSheetCount],
+  );
+
+  const frameSheetExtraReferenceUrlsForRun = useMemo(
+    () => frameSheetExtraReferenceUrls.slice(0, maxFrameSheetExtras),
+    [frameSheetExtraReferenceUrls, maxFrameSheetExtras],
+  );
+
+  const onToggleFrameSheetExtraReference = useCallback(
+    (item: ReferenceImage) => {
+      const url = item.url.trim();
+      if (!url) return;
+      setFrameSheetExtraReferenceUrls((prev) => {
+        const key = url;
+        if (prev.some((u) => u.trim() === key)) {
+          return prev.filter((u) => u.trim() !== key);
+        }
+        if (prev.length >= maxFrameSheetExtras) {
+          toast.error(
+            `At most ${maxFrameSheetExtras} extra reference image${maxFrameSheetExtras === 1 ? "" : "s"} for this run (character sheets use ${characterSheetCount} of ${MAX_REFERENCE_IMAGES} slots).`,
+          );
+          return prev;
+        }
+        return [...prev, url];
+      });
+    },
+    [characterSheetCount, maxFrameSheetExtras],
+  );
+
+  const isFrameSheetExtraReferenceSelected = useCallback(
+    (item: ReferenceImage) =>
+      frameSheetExtraReferenceUrls.some((u) => u.trim() === item.url.trim()),
+    [frameSheetExtraReferenceUrls],
   );
 
   /** Load profiles from API and drop run selections that no longer exist. */
@@ -305,6 +359,10 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
     runCharacters,
     selectedProfiles,
     artDirection,
+    frameSheetExtraReferenceUrls: frameSheetExtraReferenceUrlsForRun,
+    maxFrameSheetExtras,
+    onToggleFrameSheetExtraReference,
+    isFrameSheetExtraReferenceSelected,
     snapshotFields,
     restoreCharacterSnapshot,
     refreshCharacterProfiles,

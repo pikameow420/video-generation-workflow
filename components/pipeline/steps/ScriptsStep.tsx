@@ -46,12 +46,13 @@ export function ScriptsStep({
         {scripts ? (
           <div className="grid gap-3 sm:grid-cols-2">
             {scripts.map((s) => (
-              <button
+              <Button
                 key={s.id}
                 type="button"
+                variant="outline"
                 onClick={() => onPickScript(s.id)}
                 className={cn(
-                  "rounded-xl border p-4 text-left text-sm transition-all",
+                  "h-auto w-full flex-col items-start gap-0 rounded-xl p-4 text-left text-sm font-normal",
                   selectedId === s.id
                     ? "border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-900 dark:ring-zinc-100"
                     : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50",
@@ -60,10 +61,10 @@ export function ScriptsStep({
                 <span className="block font-semibold text-zinc-900 dark:text-zinc-100">
                   {s.title}
                 </span>
-                <span className="mt-2 line-clamp-3 leading-relaxed text-zinc-600 dark:text-zinc-400">
+                <span className="mt-2 line-clamp-3 leading-relaxed font-normal text-zinc-600 dark:text-zinc-400">
                   {s.body}
                 </span>
-              </button>
+              </Button>
             ))}
           </div>
         ) : null}

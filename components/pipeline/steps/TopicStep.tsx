@@ -53,9 +53,10 @@ function TopicBasePromptCollapsible(props: {
 
   return (
     <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-      <button
+      <Button
         type="button"
-        className="flex w-full items-center justify-between gap-2 bg-zinc-50/80 px-4 py-3 text-left transition-colors hover:bg-zinc-100/90 dark:bg-zinc-900/30 dark:hover:bg-zinc-900/55"
+        variant="ghost"
+        className="h-auto w-full justify-between gap-2 rounded-none bg-zinc-50/80 px-4 py-3 text-left font-normal hover:bg-zinc-100/90 dark:bg-zinc-900/30 dark:hover:bg-zinc-900/55"
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
       >
@@ -77,7 +78,7 @@ function TopicBasePromptCollapsible(props: {
           className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 dark:text-zinc-400 ${expanded ? "rotate-0" : "-rotate-90"}`}
           aria-hidden
         />
-      </button>
+      </Button>
       {expanded ? (
         <div className="space-y-1.5 border-t border-zinc-200 p-4 dark:border-zinc-800">
           <Label htmlFor="base-prompt-input" className="sr-only">
@@ -109,9 +110,10 @@ function TopicPresetsCollapsible(props: {
 
   return (
     <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-      <button
+      <Button
         type="button"
-        className="flex w-full items-center justify-between gap-2 bg-zinc-50/80 px-4 py-3 text-left transition-colors hover:bg-zinc-100/90 dark:bg-zinc-900/30 dark:hover:bg-zinc-900/55"
+        variant="ghost"
+        className="h-auto w-full justify-between gap-2 rounded-none bg-zinc-50/80 px-4 py-3 text-left font-normal hover:bg-zinc-100/90 dark:bg-zinc-900/30 dark:hover:bg-zinc-900/55"
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
       >
@@ -127,7 +129,7 @@ function TopicPresetsCollapsible(props: {
           className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 dark:text-zinc-400 ${expanded ? "rotate-0" : "-rotate-90"}`}
           aria-hidden
         />
-      </button>
+      </Button>
       {expanded ? (
         <div className="space-y-3 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
           {presets.length === 0 ? (
