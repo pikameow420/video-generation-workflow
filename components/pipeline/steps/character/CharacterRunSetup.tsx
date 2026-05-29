@@ -67,7 +67,7 @@ export function CharacterRunSetup({
             placeholder="e.g. flat vector mascot, soft 3D, cyberpunk palette"
           />
           <p className="text-xs text-zinc-500">
-            Applies to the script-driven frame sequence sheet. Edit here, then
+            Applies to the script-driven Video Sheet. Edit here, then
             generate again after changing settings.
           </p>
         </div>
@@ -162,7 +162,7 @@ export function CharacterRunSetup({
               <Spinner className="mr-2 h-4 w-4" /> Generating frame sheet...
             </>
           ) : (
-            "Generate Frame Sequence Sheet"
+            "Generate Video Sheet"
           )}
         </Button>
         {hasSavedFrameSheet ? (

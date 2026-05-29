@@ -84,7 +84,7 @@ export function upsertSheetScriptHistoryEntry(
 /** Default wizard state for a fresh pipeline run. */
 export function createEmptyWizardSnapshot(): WizardSnapshot {
   return {
-    isScriptSidebarOpen: true,
+    isScriptSidebarOpen: false,
     step: "topic",
     topic: "",
     tone: "",
@@ -126,7 +126,7 @@ export const WIZARD_STEPS: readonly WizardStepMeta[] = [
   { id: "topic", label: "Pick Topic", shortLabel: "Topic" },
   { id: "scripts", label: "Choose Script", shortLabel: "Scripts" },
   { id: "character", label: "Character Profile", shortLabel: "Character" },
-  { id: "sheet", label: "Frame Sequence Sheet", shortLabel: "Sheet" },
+  { id: "sheet", label: "Video Sheet", shortLabel: "Sheet" },
   { id: "video", label: "Generate Video", shortLabel: "Video" },
 ] as const;
 
@@ -225,7 +225,7 @@ export function getWizardStepStates(
     : {
         accessible: false,
         complete: false,
-        disabledReason: "Generate or reuse a frame sequence sheet first",
+        disabledReason: "Generate or reuse a Video Sheet first",
       };
 
   const videoState: WizardStepUiState = sheetUrl
@@ -236,7 +236,7 @@ export function getWizardStepStates(
     : {
         accessible: false,
         complete: false,
-        disabledReason: "Complete the frame sequence sheet step first",
+        disabledReason: "Complete the Video Sheet step first",
       };
 
   return {
@@ -304,6 +304,7 @@ export function migrateWizardSnapshot(
   if (!next.sheetScriptHistory) {
     next.sheetScriptHistory = [];
   }
+  delete (next as { pipelineRunId?: unknown }).pipelineRunId;
   delete next.videoExtraReferenceUrls;
   delete next.selectedCharacterProfileId;
   delete next.selectedReferenceUrls;

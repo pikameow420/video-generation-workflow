@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     const message =
       err instanceof Error
         ? err.message
-        : "Failed to generate frame sequence sheet";
+        : "Failed to generate Video Sheet";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

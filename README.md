@@ -2,7 +2,7 @@
 
 A **Next.js app** for solo creators: go from a topic (or your own script) to a **short vertical video** with optional **captions burned in**.
 
-The UI is a **five-step wizard**: topic & scripts → pick or edit a script → character profile & references → frame sequence sheet → generate video, then transcribe and burn subtitles if you want. **Sign-in is required** to use the pipeline, library, and paid API routes.
+The UI is a **five-step wizard**: topic & scripts → pick or edit a script → character profile & references → Video Sheet → generate video, then transcribe and burn subtitles if you want. **Sign-in is required** to use the pipeline, library, and paid API routes.
 
 ---
 
@@ -28,7 +28,7 @@ The UI is a **five-step wizard**: topic & scripts → pick or edit a script → 
 2. **Topic** — Generate scripts or bring your own; optional presets and brand kit.
 3. **Scripts** — Choose one line and edit it if needed.
 4. **Character** — Pick an existing **Character Profile** (refs, art direction, voice pre-filled) or set them up ad-hoc; optionally save the selection as a new profile.
-5. **Sheet** — Review the generated (or reused) frame sequence sheet.
+5. **Sheet** — Review the generated (or reused) Video Sheet.
 6. **Video** — Start generation, wait for the file, then **generate subtitles** and **burn** them into the video.
 
 ---
@@ -56,7 +56,7 @@ The UI is a **five-step wizard**: topic & scripts → pick or edit a script → 
 | Route guard (session + redirects) | `proxy.ts`, `lib/supabase/route-guard.ts` |
 | Auth helpers | `lib/auth/require-user.ts`, `lib/auth/session-user.ts`, `lib/auth/prediction-ownership.ts` |
 | Script API | `app/api/scripts/route.ts` |
-| Frame sequence sheet API | `app/api/frame-sequence-sheet/route.ts` |
+| Video Sheet API | `app/api/frame-sequence-sheet/route.ts` |
 | Character profiles API | `app/api/character-profiles/route.ts`, `app/api/character-profiles/[id]/sheet/route.ts` |
 | Character profiles store | `lib/character-profiles/store.ts` |
 | Video API | `app/api/video/route.ts` |
@@ -91,7 +91,7 @@ Paid and vault API routes call `requireUser()` and return **401** without a vali
 - `MUAPI_API_KEY` — MuAPI video path only ([authentication](https://muapi.ai/docs/authentication))
 - `VIDEO_PROVIDER` — default backend when the UI does not override: `atlas` or `muapi` (`lib/env.ts`)
 - `MUAPI_BASE_URL`, `MUAPI_VIDEO_ENDPOINT`, `MUAPI_VIDEO_DURATION` (4–15), `MUAPI_VIDEO_ASPECT_RATIO`, poll tuning — see `lib/env.ts`
-- `OPENAI_API_KEY` — profile character sheets (GPT Image 2 via edits), frame sequence sheet, transcription
+- `OPENAI_API_KEY` — profile character sheets (GPT Image 2 via edits), Video Sheet, transcription
 - `OPENAI_CHARACTER_SHEET_MODEL` (default `gpt-image-2`), `OPENAI_CHARACTER_SHEET_SIZE` (default `1080x1920`) — profile character sheets; frame sheet uses `OPENAI_IMAGE_MODEL` / `OPENAI_IMAGE_SIZE`
 - `UPLOAD_BACKEND` — `local` (default) or `blob`; affects reference images **only when Supabase persistence is not configured** (`blob` uses Vercel Blob)
 

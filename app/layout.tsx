@@ -3,7 +3,9 @@ import Link from "next/link";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { scriptHistoryOpenPath } from "@/lib/pipeline/script-history-open";
 import { AuthHeaderActions } from "@/components/auth/AuthHeaderActions";
+import { AppMobileNav } from "@/components/layout/AppMobileNav";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -45,7 +47,8 @@ export default function RootLayout({
               >
                 AI Social
               </Link>
-              <nav className="flex items-center gap-5 text-sm font-medium">
+              <AppMobileNav />
+              <nav className="hidden items-center gap-5 text-sm font-medium lg:flex">
                 <Link
                   href="/"
                   className="text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
@@ -57,6 +60,12 @@ export default function RootLayout({
                   className="text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                 >
                   My videos
+                </Link>
+                <Link
+                  href={scriptHistoryOpenPath()}
+                  className="text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                >
+                  My Script History
                 </Link>
                 <AuthHeaderActions />
               </nav>

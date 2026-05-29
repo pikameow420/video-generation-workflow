@@ -3,6 +3,12 @@
 import { ChangeEvent, useState } from "react";
 
 import type { CreatorPreset } from "@/lib/pipeline/creator-presets";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +16,6 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import type { ScriptMode } from "@/components/pipeline/types";
-import { ChevronDown } from "lucide-react";
 
 type TopicStepProps = {
   scriptMode: ScriptMode;
@@ -44,60 +49,13 @@ type TopicStepProps = {
 };
 
 
-function TopicBasePromptCollapsible(props: {
-  basePrompt: string;
-  onBasePromptChange: (v: string) => void;
-}) {
-  const { basePrompt, onBasePromptChange } = props;
-  const [expanded, setExpanded] = useState(true);
+const topicAccordionItemClass =
+  "overflow-hidden rounded-xl border border-zinc-200 border-b dark:border-zinc-800";
 
-  return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-      <Button
-        type="button"
-        variant="ghost"
-        className="h-auto w-full justify-between gap-2 rounded-none bg-zinc-50/80 px-4 py-3 text-left font-normal hover:bg-zinc-100/90 dark:bg-zinc-900/30 dark:hover:bg-zinc-900/55"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Style guide (always on)
-          </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Applied every time you generate scripts from a topic
-          </p>
-          {!expanded && basePrompt.trim() ? (
-            <p className="mt-1 truncate text-xs italic text-zinc-500 dark:text-zinc-400">
-              {basePrompt.trim().slice(0, 120)}
-              {basePrompt.trim().length > 120 ? "…" : ""}
-            </p>
-          ) : null}
-        </div>
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 dark:text-zinc-400 ${expanded ? "rotate-0" : "-rotate-90"}`}
-          aria-hidden
-        />
-      </Button>
-      {expanded ? (
-        <div className="space-y-1.5 border-t border-zinc-200 p-4 dark:border-zinc-800">
-          <Label htmlFor="base-prompt-input" className="sr-only">
-            Style guide
-          </Label>
-          <Textarea
-            id="base-prompt-input"
-            className="min-h-[88px]"
-            value={basePrompt}
-            onChange={(e) => onBasePromptChange(e.target.value)}
-            placeholder="e.g. Always be concise, use Gen Z slang, keep it funny"
-          />
-        </div>
-      ) : null}
-    </div>
-  );
-}
+const topicAccordionTriggerClass =
+  "rounded-none bg-zinc-50/80 px-4 py-3 font-normal hover:bg-zinc-100/90 hover:no-underline dark:bg-zinc-900/30 dark:hover:bg-zinc-900/55";
 
-function TopicPresetsCollapsible(props: {
+function TopicPresetsAccordion(props: {
   busy: boolean;
   presets: CreatorPreset[];
   onApplyPreset: (preset: CreatorPreset) => void;
@@ -105,33 +63,22 @@ function TopicPresetsCollapsible(props: {
   onDeletePreset: (id: string) => void;
 }) {
   const { busy, presets, onApplyPreset, onSavePreset, onDeletePreset } = props;
-  const [expanded, setExpanded] = useState(false);
   const [newName, setNewName] = useState("");
 
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-      <Button
-        type="button"
-        variant="ghost"
-        className="h-auto w-full justify-between gap-2 rounded-none bg-zinc-50/80 px-4 py-3 text-left font-normal hover:bg-zinc-100/90 dark:bg-zinc-900/30 dark:hover:bg-zinc-900/55"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Topic presets ({presets.length})
-          </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Reuse a topic, tone, and audience combo you have saved before.
-          </p>
-        </div>
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 dark:text-zinc-400 ${expanded ? "rotate-0" : "-rotate-90"}`}
-          aria-hidden
-        />
-      </Button>
-      {expanded ? (
-        <div className="space-y-3 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
+    <Accordion type="single" collapsible>
+      <AccordionItem value="presets" className={topicAccordionItemClass}>
+        <AccordionTrigger className={topicAccordionTriggerClass}>
+          <div className="min-w-0 text-left">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              Topic presets ({presets.length})
+            </p>
+            <p className="text-xs font-normal text-zinc-500 dark:text-zinc-400">
+              Reuse a topic, tone, and audience combo you have saved before.
+            </p>
+          </div>
+        </AccordionTrigger>
+        <AccordionContent className="space-y-3 border-t border-zinc-200 px-4 dark:border-zinc-800">
           {presets.length === 0 ? (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               No presets yet—fill in the fields below, then save the bundle.
@@ -198,9 +145,67 @@ function TopicPresetsCollapsible(props: {
               Save preset
             </Button>
           </div>
-        </div>
-      ) : null}
-    </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
+
+const STYLE_GUIDE_PREVIEW_MAX_CHARS = 100;
+
+function styleGuidePreviewSnippet(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (!flat) return "";
+  if (flat.length <= STYLE_GUIDE_PREVIEW_MAX_CHARS) return flat;
+  return `${flat.slice(0, STYLE_GUIDE_PREVIEW_MAX_CHARS).trimEnd()}…`;
+}
+
+function TopicStyleGuideAccordion(props: {
+  basePrompt: string;
+  onBasePromptChange: (v: string) => void;
+}) {
+  const { basePrompt, onBasePromptChange } = props;
+  const [openValue, setOpenValue] = useState<string | undefined>("style-guide");
+  const isOpen = openValue === "style-guide";
+  const preview = styleGuidePreviewSnippet(basePrompt);
+
+  return (
+    <Accordion
+      type="single"
+      collapsible
+      value={openValue}
+      onValueChange={setOpenValue}
+    >
+      <AccordionItem value="style-guide" className={topicAccordionItemClass}>
+        <AccordionTrigger className={topicAccordionTriggerClass}>
+          <div className="min-w-0 space-y-1 text-left">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              Style guide (always on)
+            </p>
+            <p className="text-xs font-normal text-zinc-500 dark:text-zinc-400">
+              Applied every time you generate scripts from a topic
+            </p>
+            {!isOpen && preview ? (
+              <p className="line-clamp-2 text-xs font-normal text-zinc-600 dark:text-zinc-400">
+                {preview}
+              </p>
+            ) : null}
+          </div>
+        </AccordionTrigger>
+        <AccordionContent className="space-y-1.5 border-t border-zinc-200 px-4 dark:border-zinc-800">
+          <Label htmlFor="base-prompt-input" className="sr-only">
+            Style guide
+          </Label>
+          <Textarea
+            id="base-prompt-input"
+            className="min-h-[88px]"
+            value={basePrompt}
+            onChange={(e) => onBasePromptChange(e.target.value)}
+            placeholder="e.g. Always be concise, use Gen Z slang, keep it funny"
+          />
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 }
 
@@ -269,7 +274,7 @@ export function TopicStep({
 
         {scriptMode === "generate" ? (
           <>
-            <TopicPresetsCollapsible
+            <TopicPresetsAccordion
               busy={busy}
               presets={presets}
               onApplyPreset={onApplyPreset}
@@ -336,7 +341,7 @@ export function TopicStep({
               </p>
             </div>
 
-            <TopicBasePromptCollapsible
+            <TopicStyleGuideAccordion
               basePrompt={basePrompt}
               onBasePromptChange={onBasePromptChange}
             />
@@ -403,14 +408,16 @@ export function TopicStep({
               </label>
               <span className="text-xs text-muted-foreground">Max 256KB</span>
             </div>
+            <div className="flex items-center gap-2 flex-row">
             <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={saveManualScript}
-                onChange={(e) => onSaveManualScriptChange(e.target.checked)}
-              />
-              Save to my scripts
-            </label>
+                <input
+                  type="checkbox"
+                  checked={saveManualScript}
+                  onChange={(e) => onSaveManualScriptChange(e.target.checked)}
+                />
+                Save to my scripts
+              </label>
+            </div>
             <Button
               type="button"
               disabled={busy || !scriptEdit.body.trim()}

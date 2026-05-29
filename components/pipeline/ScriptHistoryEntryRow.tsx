@@ -9,7 +9,7 @@ export type ScriptHistoryBadgeVariant =
   | "sheet"
   | "saved";
 
-const badgeClass: Record<ScriptHistoryBadgeVariant, string> = {
+export const scriptHistoryBadgeClass: Record<ScriptHistoryBadgeVariant, string> = {
   batch:
     "bg-zinc-100 text-zinc-500 dark:bg-zinc-800",
   current:
@@ -57,7 +57,7 @@ export function ScriptHistoryEntryRow({
       <span
         className={cn(
           "mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-          badgeClass[badge.variant],
+          scriptHistoryBadgeClass[badge.variant],
         )}
       >
         {badge.label}

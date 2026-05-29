@@ -36,6 +36,7 @@ import {
   WIZARD_STORAGE_KEY,
 } from "@/lib/pipeline/wizard-utils";
 import { useApiAction } from "@/hooks/useApiAction";
+import { useScriptHistorySidebar } from "@/hooks/useScriptHistorySidebar";
 import { useConfirmAlertDialog } from "@/hooks/useConfirmAlertDialog";
 import { useCreatorPresets } from "@/hooks/useCreatorPresets";
 import { useWizardCharacterStep } from "@/hooks/useWizardCharacterStep";
@@ -53,7 +54,6 @@ import { useVideoQuota } from "@/hooks/useVideoQuota";
 import { toast } from "sonner";
 
 export function PipelineWizard() {
-  const [isScriptSidebarOpen, setIsScriptSidebarOpen] = useState(true);
   const [step, setStep] = useState<Step>("topic");
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState("");
@@ -159,6 +159,16 @@ export function PipelineWizard() {
     setSavedScriptsLoaded,
     setLoadingSavedScripts,
     setError,
+  });
+
+  const {
+    isOpen: isScriptSidebarOpen,
+    setIsOpen: setIsScriptSidebarOpen,
+    close: closeScriptSidebar,
+    toggle: toggleScriptSidebar,
+  } = useScriptHistorySidebar({
+    savedScriptsLoaded,
+    loadSavedScripts,
   });
 
   const { generateSubtitles, burnSubtitles } = useWizardSubtitleActions({
@@ -607,12 +617,6 @@ export function PipelineWizard() {
     loadReferenceImages,
   ]);
 
-  const toggleScriptSidebar = useCallback(() => {
-    const next = !isScriptSidebarOpen;
-    setIsScriptSidebarOpen(next);
-    if (next && !savedScriptsLoaded) void loadSavedScripts();
-  }, [isScriptSidebarOpen, loadSavedScripts, savedScriptsLoaded]);
-
   const { generateSheet, startVideo } = useWizardSheetVideoGeneration({
     runApiAction,
     setError,
@@ -941,9 +945,11 @@ export function PipelineWizard() {
         expandedHistoryId={expandedHistoryId}
         sheetScriptHistory={sheetScriptHistory}
         onToggle={toggleScriptSidebar}
+        onClose={closeScriptSidebar}
         onRefresh={() => void loadSavedScripts()}
         onApplySavedScript={(script) => {
           applyScriptFromHistory({ title: script.title, body: script.body });
+          closeScriptSidebar();
         }}
         onPickCurrentBatchScript={(id) => {
           onPickScript(id);

@@ -101,7 +101,7 @@ export function useWizardSheetVideoGeneration(
       return;
     }
 
-    toast.info("Generating frame sequence sheet...");
+    toast.info("Generating Video Sheet...");
     setFrameSheetGenerationBusy(true);
     try {
       await maybeSaveGeneratedScript();
@@ -116,14 +116,14 @@ export function useWizardSheetVideoGeneration(
           referenceImageUrls: extraRefs.length ? extraRefs : undefined,
           characterAnchors: characterAnchors.length ? characterAnchors : undefined,
         },
-        "Frame sequence sheet failed",
+        "Video Sheet failed",
         frameSequenceSheetResponseSchema,
       );
       setSheetUrl(data.imageDataUrl);
       setSheetSource("generated");
       recordSheetScriptHistory();
       setStep("sheet");
-      toast.success("Frame sequence sheet generated.");
+      toast.success("Video Sheet generated.");
       await saveSheetToSelectedProfiles(data.imageDataUrl);
     } catch (error) {
       const message =

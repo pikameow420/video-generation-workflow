@@ -2,7 +2,7 @@ import type { VideoAudioSlot, VideoImageSlot } from "@/lib/pipeline/video-image-
 
 export const VIDEO_BASE_RULES = [
   "Create a short vertical-ready social video with native audio.",
-  "Keep motion coherent with the frame sequence sheet; natural pacing.",
+  "Keep motion coherent with the Video Sheet; natural pacing.",
   "Framing & focus: center speaking characters visually; keep faces sharp and readable when on camera.",
   "Lipsync: when a character's speaking face is on camera, lip and jaw movement should match the narration.",
   "Character consistency lock:",
@@ -36,7 +36,7 @@ const MUAPI_PROMPT_MAX_CHARS = 4000;
 
 const MUAPI_OMNI_RULES = [
   "Create a short vertical-ready social video with native audio.",
-  "Keep motion coherent with the frame sequence sheet; natural pacing.",
+  "Keep motion coherent with the Video Sheet; natural pacing.",
   "Framing & focus: center speaking characters visually; keep faces sharp and readable when on camera.",
   "Lipsync: when a character's speaking face is on camera, lip and jaw movement should match the narration.",
   "Character consistency lock:",

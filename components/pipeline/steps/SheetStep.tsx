@@ -58,7 +58,7 @@ export function SheetStep({
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
             4
           </div>
-          <CardTitle className="text-xl">Review Frame Sequence Sheet</CardTitle>
+          <CardTitle className="text-xl">Review Video Sheet</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="space-y-5 pb-6">
@@ -66,8 +66,8 @@ export function SheetStep({
           <ScrollArea className="h-[min(70vh,720px)] w-full">
             <PreviewableImage
               src={sheetUrl}
-              alt="Frame sequence sheet reference"
-              previewTitle="Frame sequence sheet"
+              alt="Video Sheet reference"
+              previewTitle="Video Sheet"
               onPreview={imagePreview.open}
               className="rounded-xl"
               imageClassName="object-contain"

@@ -310,7 +310,7 @@ export async function POST(req: Request) {
       provider,
     );
     if (!sheetImageUrl) {
-      throw new Error("Could not resolve frame sequence sheet URL for video generation");
+      throw new Error("Could not resolve Video Sheet URL for video generation");
     }
 
     const plan = await buildServerVideoPlan({

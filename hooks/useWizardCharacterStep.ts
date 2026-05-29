@@ -261,7 +261,7 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
       sheetSource: "generated",
       trackHistory: true,
     });
-    toast.success("Reusing a saved frame sequence sheet from a selected profile.");
+    toast.success("Reusing a saved Video Sheet from a selected profile.");
   }, [advanceToSheet, selectedProfiles]);
 
   const saveSheetToSelectedProfiles = useCallback(
