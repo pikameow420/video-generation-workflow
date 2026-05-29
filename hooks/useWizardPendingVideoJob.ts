@@ -30,7 +30,7 @@ export function useWizardPendingVideoJob(options: {
   });
 
   const onProcessing = useCallback(() => {
-    ref.current.setVideoStatus("Generating video…");
+    ref.current.setVideoStatus("Rendering your video…");
   }, []);
 
   const onCompleted = useCallback(
@@ -44,10 +44,10 @@ export function useWizardPendingVideoJob(options: {
       cur.setVideoMeta({ predictionId: result.predictionId });
       cur.setVideoHasCaptions(result.hasCaptions);
       cur.setPendingVideoJob(null);
-      cur.setVideoStatus("Done.");
+      cur.setVideoStatus("Finished.");
       cur.setVideoGenerationBusy(false);
       cur.setStep("video");
-      toast.success("Video generated.");
+      toast.success("Your video is ready.");
     },
     [],
   );

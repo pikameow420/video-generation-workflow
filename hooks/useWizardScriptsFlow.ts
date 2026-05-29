@@ -55,7 +55,6 @@ type UseWizardScriptsFlowOptions = {
   loadSavedScripts: () => Promise<void>;
 };
 
-/** Topic/scripts step handlers and script library persistence for the pipeline wizard. */
 export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
   const {
     runApiAction,
@@ -184,9 +183,7 @@ export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
             source: "generated",
           });
           saved.push(one);
-        } catch {
-          // Keep batch save resilient.
-        }
+        } catch {}
       }
       if (saved.length) {
         setSavedScripts((prev) => [...saved, ...prev]);
@@ -197,7 +194,7 @@ export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
   );
 
   const generateScripts = useCallback(async () => {
-    toast.info("Generating scripts...");
+    toast.info("Writing script options…");
     await runApiAction(async () => {
       const data = await postJson(
         "/api/scripts",
@@ -220,7 +217,7 @@ export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
       await saveGeneratedBatchToLibrary(list);
       setStep("scripts");
       await Promise.all([loadReferenceImages(), loadSavedScripts()]);
-      toast.success("Scripts generated.");
+      toast.success("Four script options are ready.");
     }, "Request failed");
   }, [
     audience,
@@ -248,7 +245,7 @@ export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
       return;
     }
 
-    toast.info("Preparing script...");
+    toast.info("Saving your script…");
     await runApiAction(async () => {
       setScripts(null);
       setSelectedId(null);
@@ -264,7 +261,7 @@ export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
       }
       await Promise.all([loadReferenceImages(), loadSavedScripts()]);
       setStep("scripts");
-      toast.success("Script is ready.");
+      toast.success("Script saved—you can edit it next.");
     }, "Failed to continue");
   }, [
     loadReferenceImages,
@@ -372,7 +369,6 @@ export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
     ],
   );
 
-  /** Saves script if needed and moves to the character step (no library loads). */
   const continueToCharacterStep = useCallback(async () => {
     if (!scriptEdit.body.trim()) {
       setError("Script body is required");

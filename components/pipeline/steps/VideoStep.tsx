@@ -58,9 +58,9 @@ export function VideoStep({
       <CardHeader>
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-sm font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
-            4
+            5
           </div>
-          <CardTitle className="text-xl">Final Video</CardTitle>
+          <CardTitle className="text-xl">Your video</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="space-y-5 pb-6">
@@ -72,7 +72,7 @@ export function VideoStep({
                 {videoStatus || "Working…"}
               </p>
               <p className="text-sm text-zinc-500">
-                This can take several minutes. Please don&apos;t close the tab.
+                This usually takes a few minutes. Keep this tab open until it finishes.
               </p>
             </div>
           </div>
@@ -94,7 +94,7 @@ export function VideoStep({
                     : "text-zinc-500"
                 }`}
               >
-                {videoHasCaptions ? "Captioned video" : "Preview"}
+                {videoHasCaptions ? "With burned-in captions" : "Preview"}
               </p>
               <div className="overflow-hidden rounded-lg border border-zinc-200 bg-black dark:border-zinc-800">
                 <video
@@ -118,7 +118,7 @@ export function VideoStep({
                   rel="noreferrer"
                   className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
                 >
-                  Download video ↗
+                  Download ↗
                 </a>
                 {videoMeta ? (
                   <span className="text-xs text-zinc-500">
@@ -134,7 +134,7 @@ export function VideoStep({
                     className="rounded-full"
                     asChild
                   >
-                    <Link href="/library">View in library</Link>
+                    <Link href="/library">Open in My videos</Link>
                   </Button>
                 ) : null}
                 <Button
@@ -143,7 +143,7 @@ export function VideoStep({
                   className="rounded-full"
                   onClick={() => void onStartNewRun()}
                 >
-                  Start new video
+                  Start another video
                 </Button>
               </div>
             </div>
@@ -161,11 +161,11 @@ export function VideoStep({
                   }
                   disabled={busy}
                 >
-                  <option value="auto">Auto (transcribe)</option>
+                  <option value="auto">Auto-detect speech</option>
                   <option value="en">English</option>
                   <option value="hi">Hindi</option>
                   <option value="hinglish">Hinglish</option>
-                  <option value="script">Script</option>
+                  <option value="script">From script</option>
                 </select>
                 <Button
                   type="button"
@@ -174,7 +174,7 @@ export function VideoStep({
                   disabled={busy}
                   className="rounded-full"
                 >
-                  Generate subtitles
+                  Generate SRT
                 </Button>
                 <Button
                   type="button"
@@ -182,7 +182,7 @@ export function VideoStep({
                   disabled={busy || !subtitleSrt.trim()}
                   className="rounded-full"
                 >
-                  Burn subtitles
+                  Burn into video
                 </Button>
                 {subtitleChars !== null ? (
                   <span className="text-xs text-zinc-500">
@@ -192,17 +192,17 @@ export function VideoStep({
               </div>
               {subtitleLanguage === "script" ? (
                 <p className="text-xs text-zinc-500">
-                  Uses the script you edited in step 2 (not speech-to-text). Cue timing
-                  stretches across the clip length detected from this preview{" "}
+                  Timings follow your edited script (not speech recognition), spread across
+                  the clip length from this preview{" "}
                   {subtitleVideoDurationSec != null
                     ? `(~${subtitleVideoDurationSec.toFixed(1)}s)`
-                    : "—wait for playback to initialise, or timings default to ~15s"}
+                    : "—play the video once, or we assume ~15s"}
                   .
                 </p>
               ) : null}
               <Textarea
                 className="min-h-[140px] text-xs leading-relaxed"
-                placeholder="Generated subtitles (SRT) will appear here..."
+                placeholder="Subtitle text (SRT format) appears here after you generate…"
                 value={subtitleSrt}
                 onChange={(e) => onSubtitleSrtChange(e.target.value)}
               />
@@ -217,7 +217,7 @@ export function VideoStep({
               onClick={sheetUrl ? onStartVideo : onGoTopic}
               className="rounded-full"
             >
-              {sheetUrl ? "Retry Video Generation" : "Start Over"}
+              {sheetUrl ? "Try exporting again" : "Back to topic"}
             </Button>
           </div>
         ) : null}

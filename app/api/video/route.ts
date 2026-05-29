@@ -5,6 +5,10 @@ import { maxMuapiAudioBytesPerFile, videoRequestSchema, type VideoProvider } fro
 import { getEnv } from "@/lib/env";
 import { requireUser } from "@/lib/auth/require-user";
 import { trackPrediction } from "@/lib/auth/prediction-ownership";
+import {
+  assertCanStartVideo,
+  VideoQuotaExceededError,
+} from "@/lib/auth/video-quota";
 import { parseMuapiAudioDataUrl } from "@/lib/muapi/audio-data-url";
 import { startMuapiVideoJob, uploadMuapiFile } from "@/lib/muapi/client";
 import {
@@ -265,6 +269,8 @@ export async function POST(req: Request) {
     const auth = await requireUser();
     if (auth.error) return auth.error;
 
+    await assertCanStartVideo(auth.user);
+
     const json = await req.json();
     const body = videoRequestSchema.parse(json);
     const env = getEnv();
@@ -401,6 +407,12 @@ export async function POST(req: Request) {
       provider: "atlas" as const,
     });
   } catch (err) {
+    if (err instanceof VideoQuotaExceededError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 403 },
+      );
+    }
     if (err instanceof ZodError) {
       return NextResponse.json(
         { error: err.issues.map((i) => i.message).join("; ") },

@@ -8,7 +8,8 @@ import type {
   PendingVideoJob,
   Step,
 } from "@/components/pipeline/types";
-import { postJson } from "@/lib/api/client";
+import { ApiRequestError, postJson } from "@/lib/api/client";
+import { FREE_VIDEO_LIMIT_REACHED } from "@/lib/auth/video-quota-policy";
 import type { RunApiAction } from "@/hooks/useApiAction";
 import type { RunReadinessResult } from "@/lib/pipeline/run-readiness";
 import type { VideoProvider, VideoRequest } from "@/lib/schemas";
@@ -54,6 +55,8 @@ type UseWizardSheetVideoGenerationOptions = {
   setVideoStatus: Dispatch<SetStateAction<string>>;
   setPendingVideoJob: Dispatch<SetStateAction<PendingVideoJob | null>>;
   setVideoMeta: Dispatch<SetStateAction<{ predictionId: string } | null>>;
+  onQuotaLimit: () => void;
+  onVideoStarted?: () => void;
 };
 
 export function useWizardSheetVideoGeneration(
@@ -88,6 +91,8 @@ export function useWizardSheetVideoGeneration(
     setVideoStatus,
     setPendingVideoJob,
     setVideoMeta,
+    onQuotaLimit,
+    onVideoStarted,
   } = options;
 
   const generateSheet = useCallback(async () => {
@@ -185,12 +190,24 @@ export function useWizardSheetVideoGeneration(
           ...(audioDataUrls ? { audioDataUrls } : {}),
         };
 
-        const data = await postJson(
-          "/api/video",
-          payload,
-          "Video failed",
-          videoStartResponseSchema,
-        );
+        let data;
+        try {
+          data = await postJson(
+            "/api/video",
+            payload,
+            "Video failed",
+            videoStartResponseSchema,
+          );
+        } catch (err) {
+          if (
+            err instanceof ApiRequestError &&
+            err.code === FREE_VIDEO_LIMIT_REACHED
+          ) {
+            onQuotaLimit();
+            return;
+          }
+          throw err;
+        }
         const trimmedTitle = scriptEdit.title.trim().slice(0, 200);
         const job: PendingVideoJob = {
           predictionId: data.predictionId,
@@ -202,6 +219,7 @@ export function useWizardSheetVideoGeneration(
         setVideoMeta({ predictionId: data.predictionId });
         setVideoStatus("Generating video…");
         recordSheetScriptHistoryWhenReady();
+        onVideoStarted?.();
         jobStarted = true;
       } finally {
         if (!jobStarted) setVideoGenerationBusy(false);
@@ -223,6 +241,8 @@ export function useWizardSheetVideoGeneration(
     setVideoGenerationBusy,
     setVideoMeta,
     setVideoStatus,
+    onQuotaLimit,
+    onVideoStarted,
     recordSheetScriptHistoryWhenReady,
     videoProvider,
   ]);

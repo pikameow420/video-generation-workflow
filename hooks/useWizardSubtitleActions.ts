@@ -13,7 +13,6 @@ import {
   transcribeSubtitlesResponseSchema,
 } from "@/lib/schemas";
 
-/** Transcribe + burn subtitles (Video step actions). */
 export function useWizardSubtitleActions(options: {
   runApiAction: RunApiAction;
   videoUrl: string | null;
@@ -54,7 +53,7 @@ export function useWizardSubtitleActions(options: {
       );
       return;
     }
-    toast.info("Generating subtitles...");
+    toast.info("Creating subtitles…");
     await runApiAction(async () => {
       const payload: Record<string, unknown> = {
         videoUrl,
@@ -80,7 +79,7 @@ export function useWizardSubtitleActions(options: {
       setSubtitleSrt(data.srtText);
       setSubtitleChars(data.estimatedChars ?? null);
       setVideoHasCaptions(false);
-      toast.success("Subtitles generated.");
+      toast.success("Subtitles ready—review or edit below.");
     }, "Subtitle generation failed");
   }, [
     runApiAction,
@@ -95,7 +94,7 @@ export function useWizardSubtitleActions(options: {
 
   const burnSubtitles = useCallback(async () => {
     if (!videoUrl || !subtitleSrt.trim() || !videoMeta?.predictionId) return;
-    toast.info("Burning subtitles into video...");
+    toast.info("Embedding captions into your video…");
     await runApiAction(async () => {
       const data = await postJson(
         "/api/subtitles/burn",
@@ -113,7 +112,7 @@ export function useWizardSubtitleActions(options: {
       if (!data.videoUrl) throw new Error("Caption burn failed");
       setVideoUrl(data.videoUrl);
       setVideoHasCaptions(true);
-      toast.success("Captioned video ready.");
+      toast.success("Captioned version is ready.");
     }, "Caption burn failed");
   }, [
     runApiAction,

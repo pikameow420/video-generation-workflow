@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  FreeVideoModal,
+  hasSeenFreeVideoNotice,
+  markFreeVideoNoticeSeen,
+} from "@/components/auth/FreeVideoModal";
 import { ScriptHistorySidebar } from "@/components/pipeline/ScriptHistorySidebar";
 import type {
   PendingVideoJob,
@@ -44,6 +49,7 @@ import { useWizardPendingVideoJob } from "@/hooks/useWizardPendingVideoJob";
 import { usePipelineVideoStored } from "@/hooks/usePipelineVideoStored";
 import { useWizardLocalStorage } from "@/hooks/useWizardLocalStorage";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useVideoQuota } from "@/hooks/useVideoQuota";
 import { toast } from "sonner";
 
 export function PipelineWizard() {
@@ -99,6 +105,9 @@ export function PipelineWizard() {
   const [busy, setBusy] = useState(false);
   const [frameSheetGenerationBusy, setFrameSheetGenerationBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [freeVideoNoticeOpen, setFreeVideoNoticeOpen] = useState(false);
+  const [freeVideoLimitOpen, setFreeVideoLimitOpen] = useState(false);
+  const pendingStartAfterNotice = useRef(false);
 
   useAuthGuard(useCallback(() => {
     if (pendingVideoJob !== null) {
@@ -122,6 +131,10 @@ export function PipelineWizard() {
     videoProviderEnv,
     videoBackendReady,
   } = usePipelineVideoProvider(clearMuapiAudio);
+
+  const videoQuota = useVideoQuota(step === "sheet" || step === "video");
+  const canStartVideoWithQuota =
+    videoBackendReady && !videoQuota.loading && videoQuota.canStart;
 
   const runApiAction = useApiAction({
     onError: (message) => {
@@ -629,7 +642,31 @@ export function PipelineWizard() {
     setVideoStatus,
     setPendingVideoJob,
     setVideoMeta,
+    onQuotaLimit: () => setFreeVideoLimitOpen(true),
+    onVideoStarted: () => void videoQuota.refresh(),
   });
+
+  const requestStartVideo = useCallback(() => {
+    if (videoQuota.loading) return;
+    if (!videoQuota.canStart) {
+      setFreeVideoLimitOpen(true);
+      return;
+    }
+    if (!videoQuota.exempt && videoQuota.used === 0 && !hasSeenFreeVideoNotice()) {
+      pendingStartAfterNotice.current = true;
+      setFreeVideoNoticeOpen(true);
+      return;
+    }
+    void startVideo();
+  }, [startVideo, videoQuota]);
+
+  useEffect(() => {
+    if (step !== "sheet" || !sheetUrl || videoQuota.loading) return;
+    if (videoQuota.exempt || videoQuota.used !== 0 || hasSeenFreeVideoNotice()) {
+      return;
+    }
+    setFreeVideoNoticeOpen(true);
+  }, [step, sheetUrl, videoQuota.exempt, videoQuota.loading, videoQuota.used]);
 
   const onStartNewRun = useCallback(async () => {
     const hasInFlightJob =
@@ -844,7 +881,7 @@ export function PipelineWizard() {
           videoProviderEnvLoaded={videoProviderEnv.loaded}
           atlasConfigured={videoProviderEnv.atlasConfigured}
           muapiConfigured={videoProviderEnv.muapiConfigured}
-          canStartVideo={videoBackendReady}
+          canStartVideo={canStartVideoWithQuota}
           videoGenerationBusy={videoGenerationBusy || Boolean(pendingVideoJob)}
           muapiAudioFileNames={muapiAudioFileNames}
           profileVoiceName={
@@ -857,7 +894,7 @@ export function PipelineWizard() {
           }
           onMuapiAudioFilesChange={onMuapiAudioFilesChange}
           onClearMuapiAudio={clearMuapiAudio}
-          onStartVideo={() => void startVideo()}
+          onStartVideo={requestStartVideo}
           onRegenerate={() => navigateToStep("character")}
         />
       ) : isSheetDone && sheetUrl ? (
@@ -882,7 +919,7 @@ export function PipelineWizard() {
           videoHasCaptions={videoHasCaptions}
           videoMeta={videoMeta}
           videoStoredInLibrary={videoStoredInLibrary}
-          onStartVideo={() => void startVideo()}
+          onStartVideo={requestStartVideo}
           onStartNewRun={onStartNewRun}
           onGoTopic={() => navigateToStep("topic")}
           onGenerateSubtitles={() => void generateSubtitles()}
@@ -917,6 +954,27 @@ export function PipelineWizard() {
       />
       </div>
       {confirmDialog}
+      <FreeVideoModal
+        open={freeVideoNoticeOpen}
+        variant="notice"
+        onClose={() => {
+          markFreeVideoNoticeSeen();
+          pendingStartAfterNotice.current = false;
+          setFreeVideoNoticeOpen(false);
+        }}
+        onContinue={() => {
+          markFreeVideoNoticeSeen();
+          if (pendingStartAfterNotice.current) {
+            pendingStartAfterNotice.current = false;
+            void startVideo();
+          }
+        }}
+      />
+      <FreeVideoModal
+        open={freeVideoLimitOpen}
+        variant="limit"
+        onClose={() => setFreeVideoLimitOpen(false)}
+      />
     </div>
   );
 }

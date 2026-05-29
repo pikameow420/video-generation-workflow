@@ -3,13 +3,28 @@ import { isSupabasePersistenceEnabled } from "@/lib/persistence/backend";
 
 type VideoProvider = "atlas" | "muapi";
 
-const localPredictionMap = new Map<string, string>();
+type LocalPredictionRecord = {
+  userId: string;
+  provider: VideoProvider;
+};
+
+const localPredictions = new Map<string, LocalPredictionRecord>();
+
+export function countLocalUserVideoGenerations(userId: string): number {
+  let count = 0;
+  for (const record of localPredictions.values()) {
+    if (record.userId === userId) count += 1;
+  }
+  return count;
+}
 
 export async function trackPrediction(
   predictionId: string,
   userId: string,
   provider: VideoProvider,
 ): Promise<void> {
+  localPredictions.set(predictionId, { userId, provider });
+
   if (!isSupabasePersistenceEnabled()) {
     return;
   }
@@ -31,7 +46,8 @@ export async function verifyPredictionOwnership(
   userId: string,
 ): Promise<boolean> {
   if (!isSupabasePersistenceEnabled()) {
-    return true;
+    const record = localPredictions.get(predictionId);
+    return record?.userId === userId;
   }
 
   const admin = createAdminClient();

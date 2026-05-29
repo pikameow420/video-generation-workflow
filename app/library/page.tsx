@@ -60,30 +60,24 @@ export default async function LibraryPage({
             href="/"
             className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
           >
-            ← Back to pipeline
+            ← Back to create
           </Link>
         </p>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-          Video library
+          My videos
         </h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Videos generated in this app and stored when Supabase persistence is
-          enabled.
+          Finished videos from your pipeline runs, saved to your account when
+          cloud storage is enabled.
         </p>
       </header>
 
       {persistence === "none" ? (
         <Alert>
           <AlertDescription>
-            Supabase is not configured on the server (
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">
-              NEXT_PUBLIC_SUPABASE_URL
-            </code>{" "}
-            +{" "}
-            <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">
-              SUPABASE_SECRET_KEY
-            </code>
-            ). New outputs won&apos;t appear here until persistence is on.
+            Cloud storage is not set up on this server, so new videos will not
+            appear here automatically. Finish a run on the create page and
+            download the file from the video step.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -91,14 +85,20 @@ export default async function LibraryPage({
       {items.length === 0 ? (
         <Card className="rounded-2xl border-dashed border-zinc-300 bg-zinc-50/80 p-8 text-center dark:border-zinc-700 dark:bg-zinc-950/40">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            No videos stored yet. Finish a pipeline run with Supabase enabled to
-            see it here.
+            No saved videos yet. Complete a run on the{" "}
+            <Link
+              href="/"
+              className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            >
+              create page
+            </Link>{" "}
+            and your finished clip will show up here.
           </p>
         </Card>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2">
           {items.map((item) => {
-            const displayTitle = item.title?.trim() || "Untitled";
+            const displayTitle = item.title?.trim() || "Untitled video";
             return (
               <li key={item.id}>
                 <LibraryVideoCard

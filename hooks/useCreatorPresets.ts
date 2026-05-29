@@ -71,7 +71,7 @@ export function useCreatorPresets(options: {
       setBasePrompt(p.basePrompt);
       setBrandKit(p.brandKit);
       setArtDirection(p.artDirection);
-      toast.success(`Loaded “${p.name}”`);
+      toast.success(`Preset “${p.name}” applied.`);
     },
     [
       setArtDirection,
@@ -88,7 +88,7 @@ export function useCreatorPresets(options: {
     (name: string, fields: FormFields) => {
       const trimmed = name.trim();
       if (!trimmed) {
-        toast.error("Name your preset first");
+        toast.error("Enter a name for this preset");
         return;
       }
       const preset: CreatorPreset = {
@@ -104,7 +104,7 @@ export function useCreatorPresets(options: {
         artDirection: fields.artDirection,
       };
       setPresets(addCreatorPreset(preset));
-      toast.success("Preset saved");
+      toast.success("Topic preset saved");
     },
     [],
   );
@@ -112,7 +112,7 @@ export function useCreatorPresets(options: {
   const deleteCreatorPresetById = useCallback((id: string) => {
     if (!id) return;
     setPresets(removeCreatorPreset(id));
-    toast.success("Preset removed");
+    toast.success("Preset deleted");
   }, []);
 
   return {

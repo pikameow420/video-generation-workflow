@@ -134,6 +134,14 @@ export const videoConfigResponseSchema = z.object({
   defaultProvider: videoProviderSchema,
 });
 
+export const videoQuotaResponseSchema = z.object({
+  exempt: z.boolean(),
+  used: z.number().int().nonnegative(),
+  limit: z.number().int().positive().nullable(),
+  canStart: z.boolean(),
+});
+export type VideoQuotaResponse = z.infer<typeof videoQuotaResponseSchema>;
+
 /** One stored pipeline output (Supabase Storage + signed playback URL). */
 export const pipelineVideoListItemSchema = z.object({
   id: z.string().min(1),

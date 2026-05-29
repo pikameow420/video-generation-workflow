@@ -38,7 +38,7 @@ export function ScriptsStep({
             2
           </div>
           <CardTitle className="text-xl">
-            {scripts ? "Pick and polish a script" : "Review your script"}
+            {scripts ? "Choose a script to refine" : "Review your script"}
           </CardTitle>
         </div>
       </CardHeader>
@@ -73,7 +73,7 @@ export function ScriptsStep({
           <div className="space-y-3 rounded-xl bg-zinc-50 p-4 dark:bg-zinc-900/30">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                Selected Script (Editable)
+                Your script (editable)
               </p>
               <Button
                 type="button"
@@ -82,7 +82,7 @@ export function ScriptsStep({
                 onClick={onCreateNewScript}
                 className="rounded-full"
               >
-                Create New Script
+                Start a blank script
               </Button>
             </div>
             <Input
@@ -114,10 +114,10 @@ export function ScriptsStep({
             onClick={onContinueToCharacter}
             className="rounded-full px-6"
           >
-            Continue to Character
+            Continue to character
           </Button>
           <p className="text-xs text-zinc-500">
-            Next: pick or create a Character Profile (references, art direction, voice).
+            Next: choose references, look, and optional voice for this run.
           </p>
         </div>
       </CardContent>
