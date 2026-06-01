@@ -32,7 +32,6 @@ export type PendingVideoJob = {
   predictionId: string;
   provider: "atlas" | "muapi";
   startedAt: string;
-  /** Script title — sent with status polls so the vault row can store a label. */
   title?: string;
 };
 
@@ -80,6 +79,5 @@ export type WizardSnapshot = {
   subtitleSrt: string;
   subtitleChars: number | null;
   videoHasCaptions: boolean;
-  /** In-flight provider job — restored after refresh/sleep so polling can resume. */
   pendingVideoJob: PendingVideoJob | null;
 };

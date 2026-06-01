@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Social — Ideas to short videos",
+  title: "AI Social",
   description:
     "Write or generate a script, build a visual reference sheet, and export a 15-second social video.",
 };

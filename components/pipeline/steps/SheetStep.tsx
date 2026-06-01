@@ -63,20 +63,16 @@ export function SheetStep({
       </CardHeader>
       <CardContent className="space-y-5 pb-6">
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/30">
-          <ScrollArea className="h-[min(70vh,720px)] w-full">
+          <ScrollArea className="w-full p-1">
             <PreviewableImage
               src={sheetUrl}
               alt="Video Sheet reference"
               previewTitle="Video Sheet"
               onPreview={imagePreview.open}
-              className="rounded-xl"
+              className="rounded-t-xl"
               imageClassName="object-contain"
             />
           </ScrollArea>
-          <p className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800">
-            Click the image to view full size. Scroll if the sheet is taller than the
-            preview area.
-          </p>
         </div>
 
         <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap sm:items-center">

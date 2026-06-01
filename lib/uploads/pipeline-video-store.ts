@@ -21,7 +21,7 @@ export type PipelineVideoRecord = {
   hasCaptions: boolean;
   /** Human-readable label; null when unset or legacy rows. */
   title: string | null;
-  /** Local JSON index only — soft-remove from library without DB. */
+  /** Local JSON index only - soft-remove from library without DB. */
   isDeleted?: boolean;
 };
 

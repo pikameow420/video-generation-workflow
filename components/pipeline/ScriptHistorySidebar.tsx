@@ -72,7 +72,6 @@ export function ScriptHistorySidebar({
 
   return (
     <>
-      {/* Desktop only — mobile uses hamburger → My Script History */}
       <div className="fixed right-4 top-20 z-30 hidden flex-col items-end gap-3 sm:right-6 lg:right-8 lg:flex">
         <Button
           type="button"
@@ -85,8 +84,6 @@ export function ScriptHistorySidebar({
           {isOpen ? "Hide Scripts" : "Show Scripts"}
         </Button>
       </div>
-
-      {/* Mobile/tablet drawer — `open` must stay false at lg+ (see useLgUp / Tailwind lg) or overlay dims desktop */}
       <Sheet
         open={isOpen && !lgUp}
         onOpenChange={(open) => {

@@ -168,7 +168,7 @@ export function CharacterProfileForm({
     <div className="space-y-4 rounded-xl border border-zinc-300 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-950/60">
       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
         {editingProfile
-          ? `Edit Character Profile — ${editingProfile.name}`
+          ? `Edit Character Profile for ${editingProfile.name}`
           : "New Character Profile"}
       </p>
       <div className="space-y-1.5">
@@ -231,7 +231,7 @@ export function CharacterProfileForm({
               <PreviewableImage
                 src={editingProfile.muapiCharacterSheetUrl}
                 alt={`Character sheet for ${editingProfile.name}`}
-                previewTitle={`Character sheet — ${editingProfile.name}`}
+                previewTitle={`Character sheet for ${editingProfile.name}`}
                 onPreview={imagePreview.open}
                 className="max-w-xs rounded-md border dark:border-zinc-700"
                 imageClassName="max-h-32 object-contain"

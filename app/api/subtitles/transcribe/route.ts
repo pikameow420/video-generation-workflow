@@ -34,7 +34,7 @@ function resolveSubtitleLanguageConfig(
     return {
       language: "en",
       prompt:
-        "Transcription is Hinglish: casual mix of spoken English and Hindi, written ONLY with Latin/Roman letters. Keep English phrases in normal spelling; write Hindi parts in everyday roman Hindi (no formal IAST unless obvious). Absolutely no Devanagari or other non-Latin scripts. No translation into Hindi—transcribe what was said.",
+        "Transcription is Hinglish: casual mix of spoken English and Hindi, written ONLY with Latin/Roman letters. Keep English phrases in normal spelling; write Hindi parts in everyday roman Hindi (no formal IAST unless obvious). Absolutely no Devanagari or other non-Latin scripts. No translation into Hindi, just transcribe what was said.",
     };
   }
   return { language: requested };

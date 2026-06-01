@@ -47,7 +47,7 @@ afterAll(() => {
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-describe("character profile store — local JSON fallback", () => {
+describe("character profile store - local JSON fallback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     persistenceEnabledMock.mockReturnValue(false);
@@ -198,7 +198,7 @@ describe("character profile store — local JSON fallback", () => {
   });
 });
 
-describe("character profile store — Supabase user scoping", () => {
+describe("character profile store - Supabase user scoping", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     persistenceEnabledMock.mockReturnValue(true);

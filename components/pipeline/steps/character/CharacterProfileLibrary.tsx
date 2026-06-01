@@ -202,7 +202,7 @@ export function CharacterProfileLibrary({
             {staleRunSelection ? (
               <p className="text-xs text-amber-600 dark:text-amber-400">
                 This run references a profile that could not be found. It may have been
-                deleted—deselect it or create a new profile below.
+                deleted. Deselect it or create a new profile below.
               </p>
             ) : !profiles.length ? (
               <p className="text-xs text-zinc-500">

@@ -100,7 +100,6 @@ export function PipelineWizard() {
   const [pendingVideoJob, setPendingVideoJob] = useState<PendingVideoJob | null>(
     null,
   );
-  /** True only during `/api/video` — SheetStep uses this instead of shared `busy` for the primary CTA label. */
   const [videoGenerationBusy, setVideoGenerationBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [frameSheetGenerationBusy, setFrameSheetGenerationBusy] = useState(false);

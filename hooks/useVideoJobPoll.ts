@@ -11,7 +11,6 @@ export type PendingVideoJob = {
   predictionId: string;
   provider: VideoProvider;
   startedAt: string;
-  /** Script title — sent with `/api/video/status` polls for library label. */
   title?: string;
 };
 

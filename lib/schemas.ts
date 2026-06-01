@@ -94,7 +94,6 @@ export const videoStartResponseSchema = z.object({
 export const videoStatusQuerySchema = z.object({
   predictionId: z.string().min(1),
   provider: videoProviderSchema,
-  /** Script title for library display — passed from client poll while job runs. */
   title: z
     .union([z.string(), z.null(), z.undefined()])
     .transform((s) => {

@@ -261,7 +261,7 @@ export function useWizardScriptsFlow(options: UseWizardScriptsFlowOptions) {
       }
       await Promise.all([loadReferenceImages(), loadSavedScripts()]);
       setStep("scripts");
-      toast.success("Script saved—you can edit it next.");
+      toast.success("Script saved. You can edit it next.");
     }, "Failed to continue");
   }, [
     loadReferenceImages,

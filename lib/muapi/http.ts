@@ -25,10 +25,10 @@ export function extractMuapiRequestId(
 
 export function throwMuapiHttpError(path: string, status: number, text: string): never {
   if (status === 402) {
-    throw new Error("MuAPI: insufficient credits — add balance at muapi.ai");
+    throw new Error("MuAPI: insufficient credits.");
   }
   if (status === 429) {
-    throw new Error("MuAPI: rate limited — retry later.");
+    throw new Error("MuAPI: rate limited. Retry later.");
   }
   throw new Error(`MuAPI ${path} failed (${status}): ${text || "request failed"}`);
 }

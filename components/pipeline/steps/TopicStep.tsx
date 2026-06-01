@@ -81,7 +81,7 @@ function TopicPresetsAccordion(props: {
         <AccordionContent className="space-y-3 border-t border-zinc-200 px-4 dark:border-zinc-800">
           {presets.length === 0 ? (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              No presets yet—fill in the fields below, then save the bundle.
+              No presets yet. Fill in the fields below, then save the bundle.
             </p>
           ) : (
             <ul className="space-y-2">

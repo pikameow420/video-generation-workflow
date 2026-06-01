@@ -11,7 +11,7 @@ export function buildCharacterProfileSheetPrompt(input: {
 
   return [
     `Create a single professional character reference sheet for "${name}".`,
-    "Use the attached reference photo(s) as the identity lock—preserve face, skin tone, hair, and distinguishing features.",
+    "Use the attached reference photo(s) as the identity lock. Preserve face, skin tone, hair, and distinguishing features.",
     styleLine,
     "Layout on one image (clean light background, readable labels):",
     "- Full-body views: front, back, side profile, and one natural action pose.",

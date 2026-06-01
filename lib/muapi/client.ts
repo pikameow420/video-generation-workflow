@@ -1,5 +1,5 @@
 /**
- * MuAPI — Seedance 2 Omni Reference (and related) video generation.
+ * MuAPI - Seedance 2 Omni Reference (and related) video generation.
  * @see https://muapi.ai/docs/authentication
  * @see https://api.muapi.ai/openapi.json (default /api/v1/seedance-2-omni-reference-no-video-fast)
  */
@@ -132,7 +132,7 @@ export async function getMuapiPredictionResult(params: {
   if (res.status === 402) {
     return {
       ok: false,
-      data: { status: "failed", error: "MuAPI: insufficient credits — add balance at muapi.ai" },
+      data: { status: "failed", error: "MuAPI: insufficient credits." },
     };
   }
 
@@ -261,7 +261,7 @@ export async function waitForMuapiVideoFromScriptAndImageUrls(options: {
   scriptTitle: string;
   scriptBody: string;
   imageUrls: string[];
-  /** Public URLs from MuAPI upload_file, max 3 — order matches @audio1…@audio3. */
+  /** Public URLs from MuAPI upload_file, max 3 - order matches @audio1…@audio3. */
   audioUrls?: string[];
 }): Promise<{ videoUrl: string; predictionId: string }> {
   const env = getEnv();

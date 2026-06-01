@@ -25,10 +25,10 @@ const envSchema = z.object({
     .string()
     .default("/uploads/character-assets"),
   OPENAI_API_KEY: z.string().optional(),
-  OPENAI_IMAGE_MODEL: z.string().default("gpt-image-1.5"),
+  OPENAI_IMAGE_MODEL: z.string().default("gpt-image-2"),
   OPENAI_CHARACTER_SHEET_MODEL: z.string().default("gpt-image-2"),
-  OPENAI_IMAGE_SIZE: z.string().default("1080x1920"),
-  OPENAI_CHARACTER_SHEET_SIZE: z.string().default("1080x1920"),
+  OPENAI_IMAGE_SIZE: z.string().default("auto"),
+  OPENAI_CHARACTER_SHEET_SIZE: z.string().default("auto"),
   OPENAI_IMAGE_QUALITY: z.string().default("auto"),
   OPENAI_IMAGE_OUTPUT_FORMAT: z.enum(["png", "jpeg", "webp"]).default("png"),
   SUBTITLE_DEFAULT_LANGUAGE: z.string().default("en"),
@@ -65,7 +65,6 @@ const envSchema = z.object({
   VIDEO_PROVIDER: z.enum(["atlas", "muapi"]).default("atlas"),
   MUAPI_API_KEY: z.string().optional(),
   MUAPI_BASE_URL: z.string().url().default("https://api.muapi.ai"),
-  /** Path segment under /api/v1 — see MuAPI OpenAPI. Default matches playground sd-2-omni-reference-no-video-fast. */
   MUAPI_VIDEO_ENDPOINT: z
     .string()
     .default("seedance-2-omni-reference-no-video-fast"),
@@ -89,7 +88,6 @@ const envSchema = z.object({
   MUAPI_POLL_MAX_MS: z.coerce.number().int().positive().default(900_000),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
-  /** Service role — server-only. When set with NEXT_PUBLIC_SUPABASE_URL, persistence uses Supabase. */
   SUPABASE_SECRET_KEY: z.string().min(1).optional(),
   SUPABASE_REFERENCE_IMAGES_BUCKET: z.string().min(1).default("reference-images"),
   SUPABASE_PIPELINE_VIDEOS_BUCKET: z.string().min(1).default("pipeline-videos"),
