@@ -343,7 +343,7 @@ export function PipelineWizard() {
     saveSheetToSelectedProfiles,
     restoreCharacterSnapshot,
     buildCharacterAnchors,
-    generateMuapiCharacterSheet,
+    generateCharacterSheet,
     onUploadReference,
     deleteReferenceFromLibrary,
     referenceLibraryBusy,
@@ -843,7 +843,7 @@ export function PipelineWizard() {
             onUpdateProfile,
             onUploadReference,
             onDeleteReference: (item) => void deleteReferenceFromLibrary(item),
-            onGenerateMuapiCharacterSheet: generateMuapiCharacterSheet,
+            onGenerateCharacterSheet: generateCharacterSheet,
           }}
           runSetup={{
             artDirection,

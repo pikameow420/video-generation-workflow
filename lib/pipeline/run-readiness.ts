@@ -30,7 +30,7 @@ export function assertRunReadyForFrameSheet(
     if (!profile) {
       return { ok: false, reason: "A selected character profile could not be found." };
     }
-    if (!profile.muapiCharacterSheetUrl) {
+    if (!profile.characterSheetUrl) {
       return {
         ok: false,
         reason: `"${profile.name}" needs a character sheet. Generate it in the profile editor.`,

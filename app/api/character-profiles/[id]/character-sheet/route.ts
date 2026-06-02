@@ -8,7 +8,7 @@ import {
 } from "@/lib/character-profiles/generate-character-profile-sheet";
 import { CharacterProfileNotFoundError } from "@/lib/character-profiles/store";
 import { getEnv } from "@/lib/env";
-import { muapiCharacterSheetRequestSchema } from "@/lib/schemas";
+import { characterSheetRequestSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -31,7 +31,7 @@ export async function POST(
 
     const { id } = await ctx.params;
     const raw = await req.json().catch(() => ({}));
-    const parsed = muapiCharacterSheetRequestSchema.safeParse(raw);
+    const parsed = characterSheetRequestSchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
         { error: parsed.error.flatten().fieldErrors },

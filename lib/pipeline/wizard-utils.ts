@@ -342,10 +342,10 @@ export function buildCharacterAnchorsForSheet(
   return runCharacters
     .map((run) => {
       const profile = profiles.find((p) => p.id === run.profileId);
-      if (!profile?.muapiCharacterSheetUrl) return null;
+      if (!profile?.characterSheetUrl) return null;
       return {
         name: profile.name,
-        characterSheetUrl: profile.muapiCharacterSheetUrl,
+        characterSheetUrl: profile.characterSheetUrl,
         referenceImageUrls: run.extraReferenceUrls.length
           ? dedupeReferenceUrls(run.extraReferenceUrls)
           : undefined,

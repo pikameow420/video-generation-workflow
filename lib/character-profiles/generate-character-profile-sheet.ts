@@ -17,9 +17,6 @@ export class CharacterProfileSheetInputError extends Error {
   }
 }
 
-/** @deprecated Use CharacterProfileSheetInputError */
-export const MuapiCharacterSheetInputError = CharacterProfileSheetInputError;
-
 export async function generateCharacterProfileSheetForProfile(
   profileId: string,
   userId: string,
@@ -66,7 +63,3 @@ export async function generateCharacterProfileSheetForProfile(
     userId,
   );
 }
-
-/** @deprecated Use generateCharacterProfileSheetForProfile */
-export const generateMuapiCharacterSheetForProfile =
-  generateCharacterProfileSheetForProfile;

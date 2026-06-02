@@ -16,9 +16,9 @@ function mockProfile(overrides: Partial<CharacterProfile> & { id: string; name: 
     },
     sheetUrl: null,
     muapiCharacterRequestId: overrides.muapiCharacterRequestId ?? "req-alice",
-    muapiCharacterSheetUrl:
-      overrides.muapiCharacterSheetUrl ?? "https://example.com/alice-sheet.png",
-    muapiCharacterSheetUpdatedAt: "2026-01-01T00:00:00.000Z",
+    characterSheetUrl:
+      overrides.characterSheetUrl ?? "https://example.com/alice-sheet.png",
+    characterSheetUpdatedAt: "2026-01-01T00:00:00.000Z",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -32,7 +32,7 @@ describe("buildVideoImagePlan", () => {
       id: "b",
       name: "Bob",
       muapiCharacterRequestId: "req-bob",
-      muapiCharacterSheetUrl: "https://example.com/bob-sheet.png",
+      characterSheetUrl: "https://example.com/bob-sheet.png",
     });
 
     const plan = buildVideoImagePlan({

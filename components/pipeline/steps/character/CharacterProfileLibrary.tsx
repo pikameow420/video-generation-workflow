@@ -34,7 +34,7 @@ export type CharacterProfileLibraryProps = {
   ) => Promise<boolean>;
   onUploadReference: (e: ChangeEvent<HTMLInputElement>) => Promise<ReferenceImage | null>;
   onDeleteReference: (item: ReferenceImage) => void;
-  onGenerateMuapiCharacterSheet: (
+  onGenerateCharacterSheet: (
     profileId: string,
     options?: { referenceImageIds: string[] },
   ) => Promise<unknown>;
@@ -56,7 +56,7 @@ export function CharacterProfileLibrary({
   onUpdateProfile,
   onUploadReference,
   onDeleteReference,
-  onGenerateMuapiCharacterSheet,
+  onGenerateCharacterSheet,
 }: CharacterProfileLibraryProps) {
   const [formTarget, setFormTarget] = useState<"new" | string | null>(null);
   const [profileToDelete, setProfileToDelete] = useState<CharacterProfile | null>(
@@ -113,7 +113,7 @@ export function CharacterProfileLibrary({
                           {profile.referenceImages.length === 1 ? "" : "s"}
                         </span>
 
-                        {profile.muapiCharacterSheetUrl ? (
+                        {profile.characterSheetUrl ? (
                           <span>character sheet</span>
                         ) : (
                           <span className="text-amber-600 dark:text-amber-400">
@@ -256,7 +256,7 @@ export function CharacterProfileLibrary({
           onDeleteReference={onDeleteReference}
           onCreateProfile={onCreateProfile}
           onUpdateProfile={onUpdateProfile}
-          onGenerateMuapiCharacterSheet={onGenerateMuapiCharacterSheet}
+          onGenerateCharacterSheet={onGenerateCharacterSheet}
           onClose={closeForm}
         />
       ) : null}

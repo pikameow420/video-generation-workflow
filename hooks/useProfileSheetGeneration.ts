@@ -25,7 +25,7 @@ type GenerateSheetFromFormArgs = {
     id: string,
     input: UpdateCharacterProfilePayload,
   ) => Promise<boolean>;
-  onGenerateMuapiCharacterSheet: (
+  onGenerateCharacterSheet: (
     profileId: string,
     options?: { referenceImageIds: string[] },
   ) => Promise<unknown>;
@@ -45,7 +45,7 @@ export function useProfileSheetGeneration() {
         formKeepExistingVoice,
         editingProfile,
         onUpdateProfile,
-        onGenerateMuapiCharacterSheet,
+        onGenerateCharacterSheet,
       } = args;
 
       setGeneratingCharSheet(true);
@@ -62,7 +62,7 @@ export function useProfileSheetGeneration() {
           if (!saved) return;
         }
 
-        await onGenerateMuapiCharacterSheet(profileId, {
+        await onGenerateCharacterSheet(profileId, {
           referenceImageIds: formReferenceIds,
         });
       } finally {

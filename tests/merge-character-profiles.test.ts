@@ -12,8 +12,8 @@ function mockProfile(id: string, updatedAt: string): CharacterProfile {
     voiceSample: null,
     sheetUrl: null,
     muapiCharacterRequestId: null,
-    muapiCharacterSheetUrl: null,
-    muapiCharacterSheetUpdatedAt: null,
+    characterSheetUrl: null,
+    characterSheetUpdatedAt: null,
     createdAt: updatedAt,
     updatedAt,
   };

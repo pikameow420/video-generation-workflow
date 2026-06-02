@@ -50,8 +50,8 @@ export function buildVideoImagePlan(input: {
     const profile = input.profiles.find((p) => p.id === run.profileId);
     if (!profile) continue;
 
-    if (profile.muapiCharacterSheetUrl) {
-      pushUrl(profile.muapiCharacterSheetUrl, {
+    if (profile.characterSheetUrl) {
+      pushUrl(profile.characterSheetUrl, {
         kind: "characterSheet",
         name: profile.name,
         profileId: profile.id,

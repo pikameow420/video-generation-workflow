@@ -59,7 +59,7 @@ export function useCharacterProfiles(options: {
     options?: ProfileSubmitOptions,
   ) => Promise<boolean>;
   saveProfileSheet: (id: string, imageDataUrl: string) => Promise<void>;
-  generateMuapiCharacterSheet: (
+  generateCharacterSheet: (
     id: string,
     options?: { referenceImageIds: string[] },
   ) => Promise<CharacterProfile | null>;
@@ -260,7 +260,7 @@ export function useCharacterProfiles(options: {
     [setCharacterProfiles],
   );
 
-  const generateMuapiCharacterSheet = useCallback(
+  const generateCharacterSheet = useCallback(
     async (
       id: string,
       options?: { referenceImageIds: string[] },
@@ -273,7 +273,7 @@ export function useCharacterProfiles(options: {
             ? { referenceImageIds: options.referenceImageIds }
             : {};
         const updated = await postJson(
-          `/api/character-profiles/${encodeURIComponent(id)}/muapi-character-sheet`,
+          `/api/character-profiles/${encodeURIComponent(id)}/character-sheet`,
           body,
           "Could not generate character sheet",
           characterProfileSchema,
@@ -304,6 +304,6 @@ export function useCharacterProfiles(options: {
     submitCreateProfile,
     submitUpdateProfile,
     saveProfileSheet,
-    generateMuapiCharacterSheet,
+    generateCharacterSheet,
   };
 }

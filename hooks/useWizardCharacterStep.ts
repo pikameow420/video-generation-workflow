@@ -76,7 +76,7 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
     submitCreateProfile,
     submitUpdateProfile,
     saveProfileSheet,
-    generateMuapiCharacterSheet,
+    generateCharacterSheet,
   } = useCharacterProfiles({
     setCharacterProfiles,
     setLoadingCharacterProfiles,
@@ -120,7 +120,7 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
     () =>
       runCharacters.filter((run) => {
         const profile = characterProfiles.find((p) => p.id === run.profileId);
-        return Boolean(profile?.muapiCharacterSheetUrl);
+        return Boolean(profile?.characterSheetUrl);
       }).length,
     [characterProfiles, runCharacters],
   );
@@ -378,7 +378,7 @@ export function useWizardCharacterStep(options: UseWizardCharacterStepOptions) {
     buildCharacterAnchors,
     frameSheetReadiness,
     muapiVideoReadiness,
-    generateMuapiCharacterSheet,
+    generateCharacterSheet,
     onUploadReference,
     deleteReferenceFromLibrary,
     referenceLibraryBusy,

@@ -213,8 +213,9 @@ export const characterProfileSchema = z.object({
   /** Last saved frame-sequence-sheet for this profile, reusable across runs. */
   sheetUrl: z.string().min(1).nullable(),
   muapiCharacterRequestId: z.string().min(1).nullable(),
-  muapiCharacterSheetUrl: z.string().min(1).nullable(),
-  muapiCharacterSheetUpdatedAt: z.string().nullable(),
+  /** OpenAI-generated identity reference sheet (not the frame-sequence video sheet). */
+  characterSheetUrl: z.string().min(1).nullable(),
+  characterSheetUpdatedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -274,7 +275,7 @@ export const saveCharacterProfileSheetRequestSchema = z.object({
     }),
 });
 
-export const muapiCharacterSheetRequestSchema = z.object({
+export const characterSheetRequestSchema = z.object({
   referenceImageIds: z
     .array(z.string().min(1))
     .min(1, "At least one anchor reference image is required")

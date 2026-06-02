@@ -73,9 +73,9 @@ type StoredCharacterProfile = {
   sheetStoragePath: string | null;
   sheetMimeType: string | null;
   muapiCharacterRequestId?: string | null;
-  muapiCharacterSheetStoragePath?: string | null;
-  muapiCharacterSheetMimeType?: string | null;
-  muapiCharacterSheetUpdatedAt?: string | null;
+  characterSheetStoragePath?: string | null;
+  characterSheetMimeType?: string | null;
+  characterSheetUpdatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -85,9 +85,6 @@ export type SaveCharacterProfileSheetInput = {
   bytes: Uint8Array;
   mimeType: string;
 };
-
-/** @deprecated Use SaveCharacterProfileSheetInput */
-export type SaveMuapiCharacterSheetInput = SaveCharacterProfileSheetInput;
 
 function referenceIdsChanged(
   before: string[],
@@ -99,14 +96,14 @@ function referenceIdsChanged(
   return a.some((id, i) => id !== b[i]);
 }
 
-async function clearMuapiCharacterSheetLocal(stored: StoredCharacterProfile): Promise<void> {
-  if (stored.muapiCharacterSheetStoragePath) {
-    await removeLocalAsset(stored.muapiCharacterSheetStoragePath);
+async function clearCharacterSheetLocal(stored: StoredCharacterProfile): Promise<void> {
+  if (stored.characterSheetStoragePath) {
+    await removeLocalAsset(stored.characterSheetStoragePath);
   }
   stored.muapiCharacterRequestId = null;
-  stored.muapiCharacterSheetStoragePath = null;
-  stored.muapiCharacterSheetMimeType = null;
-  stored.muapiCharacterSheetUpdatedAt = null;
+  stored.characterSheetStoragePath = null;
+  stored.characterSheetMimeType = null;
+  stored.characterSheetUpdatedAt = null;
 }
 
 const AUDIO_MIME_TO_EXT: Record<string, string> = {
@@ -200,11 +197,32 @@ function asIso(ts: unknown): string {
 
 // --- Local JSON index fallback -------------------------------------------------
 
+type LegacyStoredCharacterProfile = StoredCharacterProfile & {
+  muapiCharacterSheetStoragePath?: string | null;
+  muapiCharacterSheetMimeType?: string | null;
+  muapiCharacterSheetUpdatedAt?: string | null;
+};
+
+function normalizeStoredCharacterProfile(
+  raw: LegacyStoredCharacterProfile,
+): StoredCharacterProfile {
+  return {
+    ...raw,
+    characterSheetStoragePath:
+      raw.characterSheetStoragePath ?? raw.muapiCharacterSheetStoragePath ?? null,
+    characterSheetMimeType:
+      raw.characterSheetMimeType ?? raw.muapiCharacterSheetMimeType ?? null,
+    characterSheetUpdatedAt:
+      raw.characterSheetUpdatedAt ?? raw.muapiCharacterSheetUpdatedAt ?? null,
+  };
+}
+
 async function readIndex(indexPath: string): Promise<StoredCharacterProfile[]> {
   try {
     const content = await readFile(indexPath, "utf8");
-    const parsed = JSON.parse(content) as StoredCharacterProfile[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(content) as LegacyStoredCharacterProfile[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeStoredCharacterProfile);
   } catch (err) {
     const error = err as NodeJS.ErrnoException;
     if (error.code === "ENOENT") {
@@ -275,10 +293,10 @@ async function toRecordLocal(
         : null,
     sheetUrl: stored.sheetStoragePath ? localAssetUrl(stored.sheetStoragePath) : null,
     muapiCharacterRequestId: stored.muapiCharacterRequestId ?? null,
-    muapiCharacterSheetUrl: stored.muapiCharacterSheetStoragePath
-      ? localAssetUrl(stored.muapiCharacterSheetStoragePath)
+    characterSheetUrl: stored.characterSheetStoragePath
+      ? localAssetUrl(stored.characterSheetStoragePath)
       : null,
-    muapiCharacterSheetUpdatedAt: stored.muapiCharacterSheetUpdatedAt ?? null,
+    characterSheetUpdatedAt: stored.characterSheetUpdatedAt ?? null,
     createdAt: stored.createdAt,
     updatedAt: stored.updatedAt,
   });
@@ -297,9 +315,9 @@ type CharacterProfileRow = {
   sheet_storage_path: string | null;
   sheet_mime_type: string | null;
   muapi_character_request_id: string | null;
-  muapi_character_sheet_storage_path: string | null;
-  muapi_character_sheet_mime_type: string | null;
-  muapi_character_sheet_updated_at: unknown;
+  character_sheet_storage_path: string | null;
+  character_sheet_mime_type: string | null;
+  character_sheet_updated_at: unknown;
   created_at: unknown;
   updated_at: unknown;
 };
@@ -335,12 +353,12 @@ async function toRecordSupabase(
     sheetUrl = await createStorageSignedUrl(admin, bucket, row.sheet_storage_path, expires);
   }
 
-  let muapiCharacterSheetUrl: string | null = null;
-  if (row.muapi_character_sheet_storage_path) {
-    muapiCharacterSheetUrl = await createStorageSignedUrl(
+  let characterSheetUrl: string | null = null;
+  if (row.character_sheet_storage_path) {
+    characterSheetUrl = await createStorageSignedUrl(
       admin,
       bucket,
-      row.muapi_character_sheet_storage_path,
+      row.character_sheet_storage_path,
       expires,
     );
   }
@@ -353,9 +371,9 @@ async function toRecordSupabase(
     voiceSample,
     sheetUrl,
     muapiCharacterRequestId: row.muapi_character_request_id ?? null,
-    muapiCharacterSheetUrl,
-    muapiCharacterSheetUpdatedAt: row.muapi_character_sheet_updated_at
-      ? asIso(row.muapi_character_sheet_updated_at)
+    characterSheetUrl,
+    characterSheetUpdatedAt: row.character_sheet_updated_at
+      ? asIso(row.character_sheet_updated_at)
       : null,
     createdAt: asIso(row.created_at),
     updatedAt: asIso(row.updated_at),
@@ -418,9 +436,9 @@ async function createCharacterProfileSupabase(
       sheet_storage_path: null,
       sheet_mime_type: null,
       muapi_character_request_id: null,
-      muapi_character_sheet_storage_path: null,
-      muapi_character_sheet_mime_type: null,
-      muapi_character_sheet_updated_at: null,
+      character_sheet_storage_path: null,
+      character_sheet_mime_type: null,
+      character_sheet_updated_at: null,
       created_at: now,
       updated_at: now,
     },
@@ -508,7 +526,7 @@ async function deleteCharacterProfileSupabase(id: string, userId: string): Promi
   for (const objectPath of [
     row.voice_sample_path,
     row.sheet_storage_path,
-    row.muapi_character_sheet_storage_path,
+    row.character_sheet_storage_path,
   ]) {
     if (!objectPath) continue;
     try {
@@ -570,20 +588,20 @@ async function updateCharacterProfileSupabase(
   );
 
   let muapiCharacterRequestId = row.muapi_character_request_id;
-  let muapiCharacterSheetStoragePath = row.muapi_character_sheet_storage_path;
-  let muapiCharacterSheetMimeType = row.muapi_character_sheet_mime_type;
-  let muapiCharacterSheetUpdatedAt = row.muapi_character_sheet_updated_at;
+  let characterSheetStoragePath = row.character_sheet_storage_path;
+  let characterSheetMimeType = row.character_sheet_mime_type;
+  let characterSheetUpdatedAt = row.character_sheet_updated_at;
 
-  if (refsChanged && muapiCharacterSheetStoragePath) {
+  if (refsChanged && characterSheetStoragePath) {
     try {
-      await removeStorageObject(admin, bucket, muapiCharacterSheetStoragePath);
+      await removeStorageObject(admin, bucket, characterSheetStoragePath);
     } catch {
       /* tolerate missing blob */
     }
     muapiCharacterRequestId = null;
-    muapiCharacterSheetStoragePath = null;
-    muapiCharacterSheetMimeType = null;
-    muapiCharacterSheetUpdatedAt = null;
+    characterSheetStoragePath = null;
+    characterSheetMimeType = null;
+    characterSheetUpdatedAt = null;
   }
 
   const updatedAt = new Date().toISOString();
@@ -597,9 +615,9 @@ async function updateCharacterProfileSupabase(
       voice_sample_mime: voiceSampleMime,
       voice_sample_name: voiceSampleName,
       muapi_character_request_id: muapiCharacterRequestId,
-      muapi_character_sheet_storage_path: muapiCharacterSheetStoragePath,
-      muapi_character_sheet_mime_type: muapiCharacterSheetMimeType,
-      muapi_character_sheet_updated_at: muapiCharacterSheetUpdatedAt,
+      character_sheet_storage_path: characterSheetStoragePath,
+      character_sheet_mime_type: characterSheetMimeType,
+      character_sheet_updated_at: characterSheetUpdatedAt,
       updated_at: updatedAt,
     })
     .eq("id", id)
@@ -620,9 +638,9 @@ async function updateCharacterProfileSupabase(
       voice_sample_mime: voiceSampleMime,
       voice_sample_name: voiceSampleName,
       muapi_character_request_id: muapiCharacterRequestId,
-      muapi_character_sheet_storage_path: muapiCharacterSheetStoragePath,
-      muapi_character_sheet_mime_type: muapiCharacterSheetMimeType,
-      muapi_character_sheet_updated_at: muapiCharacterSheetUpdatedAt,
+      character_sheet_storage_path: characterSheetStoragePath,
+      character_sheet_mime_type: characterSheetMimeType,
+      character_sheet_updated_at: characterSheetUpdatedAt,
       updated_at: updatedAt,
     },
     userId,
@@ -642,13 +660,13 @@ type SheetAssetBytesInput = {
 function sheetStorageObjectPath(profileId: string, assetKind: ProfileSheetAssetKind, ext: string) {
   return assetKind.kind === "frameSequence"
     ? `${profileId}/sheet.${ext}`
-    : `${profileId}/muapi-character-sheet.${ext}`;
+    : `${profileId}/character-sheet.${ext}`;
 }
 
 function sheetLocalAssetFileName(profileId: string, assetKind: ProfileSheetAssetKind, ext: string) {
   return assetKind.kind === "frameSequence"
     ? `sheet-${profileId}.${ext}`
-    : `muapi-char-sheet-${profileId}.${ext}`;
+    : `character-sheet-${profileId}.${ext}`;
 }
 
 async function persistProfileSheetAssetSupabase(
@@ -669,7 +687,7 @@ async function persistProfileSheetAssetSupabase(
   const previousPath =
     assetKind.kind === "frameSequence"
       ? row.sheet_storage_path
-      : row.muapi_character_sheet_storage_path;
+      : row.character_sheet_storage_path;
   if (previousPath && previousPath !== objectPath) {
     try {
       await removeStorageObject(admin, bucket, previousPath);
@@ -688,9 +706,9 @@ async function persistProfileSheetAssetSupabase(
         }
       : {
           muapi_character_request_id: assetKind.requestId,
-          muapi_character_sheet_storage_path: objectPath,
-          muapi_character_sheet_mime_type: input.mimeType,
-          muapi_character_sheet_updated_at: updatedAt,
+          character_sheet_storage_path: objectPath,
+          character_sheet_mime_type: input.mimeType,
+          character_sheet_updated_at: updatedAt,
           updated_at: updatedAt,
         };
 
@@ -717,9 +735,9 @@ async function persistProfileSheetAssetSupabase(
       : {
           ...row,
           muapi_character_request_id: assetKind.requestId,
-          muapi_character_sheet_storage_path: objectPath,
-          muapi_character_sheet_mime_type: input.mimeType,
-          muapi_character_sheet_updated_at: updatedAt,
+          character_sheet_storage_path: objectPath,
+          character_sheet_mime_type: input.mimeType,
+          character_sheet_updated_at: updatedAt,
           updated_at: updatedAt,
         };
 
@@ -750,16 +768,16 @@ async function persistProfileSheetAssetLocal(
     stored.updatedAt = new Date().toISOString();
   } else {
     if (
-      stored.muapiCharacterSheetStoragePath &&
-      stored.muapiCharacterSheetStoragePath !== fileName
+      stored.characterSheetStoragePath &&
+      stored.characterSheetStoragePath !== fileName
     ) {
-      await removeLocalAsset(stored.muapiCharacterSheetStoragePath);
+      await removeLocalAsset(stored.characterSheetStoragePath);
     }
     stored.muapiCharacterRequestId = assetKind.requestId;
-    stored.muapiCharacterSheetStoragePath = fileName;
-    stored.muapiCharacterSheetMimeType = input.mimeType;
-    stored.muapiCharacterSheetUpdatedAt = new Date().toISOString();
-    stored.updatedAt = stored.muapiCharacterSheetUpdatedAt;
+    stored.characterSheetStoragePath = fileName;
+    stored.characterSheetMimeType = input.mimeType;
+    stored.characterSheetUpdatedAt = new Date().toISOString();
+    stored.updatedAt = stored.characterSheetUpdatedAt;
   }
 
   await writeIndex(records);
@@ -896,7 +914,7 @@ export async function updateCharacterProfile(
   stored.voiceSampleName = voiceAfter.name;
 
   if (referenceIdsChanged(stored.referenceImageIds, input.referenceImageIds)) {
-    await clearMuapiCharacterSheetLocal(stored);
+    await clearCharacterSheetLocal(stored);
   }
 
   stored.name = input.name;
@@ -923,7 +941,7 @@ export async function deleteCharacterProfile(id: string, userId?: string): Promi
   for (const fileName of [
     stored.voiceSamplePath,
     stored.sheetStoragePath,
-    stored.muapiCharacterSheetStoragePath,
+    stored.characterSheetStoragePath,
   ]) {
     if (fileName) await removeLocalAsset(fileName);
   }
@@ -962,6 +980,3 @@ export async function saveCharacterProfileSheet(
   }
   return persistProfileSheetAssetLocal(id, input, assetKind, userId);
 }
-
-/** @deprecated Use saveCharacterProfileSheet */
-export const saveMuapiCharacterSheet = saveCharacterProfileSheet;

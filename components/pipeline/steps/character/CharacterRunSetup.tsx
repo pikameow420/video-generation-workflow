@@ -84,7 +84,7 @@ export function CharacterRunSetup({
                   <span className="font-medium text-zinc-900 dark:text-zinc-100">
                     {profile.name}
                   </span>
-                  {profile.muapiCharacterSheetUrl ? (
+                  {profile.characterSheetUrl ? (
                     <span className="text-xs text-emerald-600 dark:text-emerald-400">
                       character sheet
                     </span>

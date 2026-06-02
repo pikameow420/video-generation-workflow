@@ -70,7 +70,7 @@ describe("character profile store - local JSON fallback", () => {
     expect(created.voiceSample?.mimeType).toBe("audio/mpeg");
     expect(created.voiceSample?.url).toMatch(/^\/uploads\/character-assets\//);
     expect(created.sheetUrl).toBeNull();
-    expect(created.muapiCharacterSheetUrl).toBeNull();
+    expect(created.characterSheetUrl).toBeNull();
     expect(created.muapiCharacterRequestId).toBeNull();
 
     const listed = await listCharacterProfiles();
@@ -167,8 +167,8 @@ describe("character profile store - local JSON fallback", () => {
       mimeType: "image/png",
     });
     expect(withSheet.muapiCharacterRequestId).toBeNull();
-    expect(withSheet.muapiCharacterSheetUrl).toMatch(
-      /^\/uploads\/character-assets\/muapi-char-sheet-/,
+    expect(withSheet.characterSheetUrl).toMatch(
+      /^\/uploads\/character-assets\/character-sheet-/,
     );
 
     const cleared = await updateCharacterProfile(created.id, {
@@ -177,7 +177,7 @@ describe("character profile store - local JSON fallback", () => {
       referenceImageIds: ["ref-b"],
     });
     expect(cleared.muapiCharacterRequestId).toBeNull();
-    expect(cleared.muapiCharacterSheetUrl).toBeNull();
+    expect(cleared.characterSheetUrl).toBeNull();
   });
 
   it("deletes a profile and then refuses to return it", async () => {

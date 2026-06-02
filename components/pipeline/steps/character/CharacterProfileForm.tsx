@@ -65,7 +65,7 @@ export type CharacterProfileFormProps = {
     id: string,
     input: UpdateCharacterProfilePayload,
   ) => Promise<boolean>;
-  onGenerateMuapiCharacterSheet: (
+  onGenerateCharacterSheet: (
     profileId: string,
     options?: { referenceImageIds: string[] },
   ) => Promise<unknown>;
@@ -82,7 +82,7 @@ export function CharacterProfileForm({
   onDeleteReference,
   onCreateProfile,
   onUpdateProfile,
-  onGenerateMuapiCharacterSheet,
+  onGenerateCharacterSheet,
   onClose,
 }: CharacterProfileFormProps) {
   const editingProfile =
@@ -226,21 +226,21 @@ export function CharacterProfileForm({
             Built from your anchor photos. Generate before using this profile in a
             run.
           </p>
-          {editingProfile.muapiCharacterSheetUrl ? (
+          {editingProfile.characterSheetUrl ? (
             <div className="flex flex-wrap items-start gap-3">
               <PreviewableImage
-                src={editingProfile.muapiCharacterSheetUrl}
+                src={editingProfile.characterSheetUrl}
                 alt={`Character sheet for ${editingProfile.name}`}
                 previewTitle={`Character sheet for ${editingProfile.name}`}
                 onPreview={imagePreview.open}
                 className="max-w-xs rounded-md border dark:border-zinc-700"
                 imageClassName="max-h-32 object-contain"
               />
-              {editingProfile.muapiCharacterSheetUpdatedAt ? (
+              {editingProfile.characterSheetUpdatedAt ? (
                 <p className="text-xs text-zinc-500">
                   Updated{" "}
                   {new Date(
-                    editingProfile.muapiCharacterSheetUpdatedAt,
+                    editingProfile.characterSheetUpdatedAt,
                   ).toLocaleString()}
                 </p>
               ) : null}
@@ -266,7 +266,7 @@ export function CharacterProfileForm({
                 formKeepExistingVoice,
                 editingProfile,
                 onUpdateProfile,
-                onGenerateMuapiCharacterSheet,
+                onGenerateCharacterSheet,
               });
             }}
           >
@@ -275,7 +275,7 @@ export function CharacterProfileForm({
                 <Spinner className="mr-2 h-3 w-3" />
                 Generating...
               </>
-            ) : editingProfile.muapiCharacterSheetUrl ? (
+            ) : editingProfile.characterSheetUrl ? (
               "Regenerate Character Sheet"
             ) : (
               "Generate Character Sheet"

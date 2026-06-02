@@ -17,9 +17,9 @@ function mockProfile(
     voiceSample: overrides.voiceSample ?? null,
     sheetUrl: null,
     muapiCharacterRequestId: overrides.muapiCharacterRequestId ?? "req-1",
-    muapiCharacterSheetUrl:
-      overrides.muapiCharacterSheetUrl ?? "https://example.com/sheet.png",
-    muapiCharacterSheetUpdatedAt: "2026-01-01T00:00:00.000Z",
+    characterSheetUrl:
+      overrides.characterSheetUrl ?? "https://example.com/sheet.png",
+    characterSheetUpdatedAt: "2026-01-01T00:00:00.000Z",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -34,7 +34,7 @@ describe("run readiness", () => {
         id: "a",
         name: "Alice",
         muapiCharacterRequestId: null,
-        muapiCharacterSheetUrl: "https://example.com/sheet.png",
+        characterSheetUrl: "https://example.com/sheet.png",
       }),
     ];
     expect(assertRunReadyForFrameSheet(run, profiles)).toEqual({ ok: true });
@@ -46,7 +46,7 @@ describe("run readiness", () => {
       mockProfile({
         id: "a",
         name: "Alice",
-        muapiCharacterSheetUrl: null,
+        characterSheetUrl: null,
         muapiCharacterRequestId: null,
       }),
     ];
